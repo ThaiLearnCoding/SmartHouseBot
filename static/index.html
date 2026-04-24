@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Local Smart Home Voice Assistant</title>
+    <style>
+        :root {
+            --bg-1: #f3f7f7;
+            --bg-2: #d9ece8;
+            --panel: #ffffff;
+            --ink: #102224;
+            --muted: #4c6669;
+            --brand: #0f8b8d;
+            --accent: #e08e45;
+            --ok: #1f9d55;
+            --error: #c0392b;
+            --radius: 18px;
+            --shadow: 0 14px 32px rgba(10, 31, 38, 0.12);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: "Poppins", "Trebuchet MS", sans-serif;
+            color: var(--ink);
+            background:
+                radial-gradient(circle at 15% 20%, rgba(224, 142, 69, 0.22), transparent 42%),
+                radial-gradient(circle at 85% 80%, rgba(15, 139, 141, 0.24), transparent 50%),
+                linear-gradient(160deg, var(--bg-1), var(--bg-2));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 22px;
+        }
+
+        .card {
+            width: min(920px, 100%);
+            border-radius: var(--radius);
+            background: var(--panel);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            display: grid;
+            grid-template-columns: 1.2fr 1fr;
+        }
+
+        .hero {
+            padding: 28px;
+            background: linear-gradient(160deg, #0f8b8d, #14696d);
+            color: #f4fffe;
+            position: relative;
+        }
+
+        .hero h1 {
+            margin: 0 0 10px;
+            font-size: 1.6rem;
+            line-height: 1.2;
+        }
+
+        .hero p {
+            margin: 0 0 16px;
+            color: #d5f7f4;
+            line-height: 1.5;
+        }
+
+        .hint {
+            margin-top: 12px;
+            font-size: 0.92rem;
+            color: #b9efea;
+        }
+
+        .panel {
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .status {
+            font-size: 0.92rem;
+            color: var(--muted);
+            min-height: 22px;
+        }
+
+        .pill {
+            display: inline-block;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-size: 0.8rem;
+            background: #eaf4f4;
+            color: #335356;
+        }
+
+        .btn-row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            border: 0;
+            border-radius: 12px;
+            padding: 12px 16px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 120ms ease, filter 120ms ease;
+        }
+
+        button:hover {
+            transform: translateY(-1px);
+            filter: brightness(1.05);
+        }
+
+        .primary {
+            background: var(--brand);
+            color: #fff;
+        }
+
+        .secondary {
+            background: #e8efef;
+            color: #173033;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 72px;
+            border-radius: 12px;
+            border: 1px solid #c9dcdb;
+            padding: 12px;
+            resize: vertical;
+            font-size: 0.95rem;
+            font-family: inherit;
+        }
+
+        .label {
+            font-size: 0.85rem;
+            color: var(--muted);
+            margin-bottom: 4px;
+        }
+
+        .result {
+            border: 1px solid #d7e7e6;
+            border-radius: 12px;
+            padding: 12px;
+            background: #fbfefd;
+        }
+
+        .result strong {
+            color: #0f373b;
+        }
+
+        .error {
+            color: var(--error);
+        }
+
+        .ok {
+            color: var(--ok);
+        }
+
+        audio {
+            width: 100%;
+            margin-top: 6px;
+        }
+
+        @media (max-width: 860px) {
+            .card {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <main class="card">
+        <section class="hero">
+            <span class="pill">Private Local AI</span>
+            <h1>Smart Home Voice Assistant</h1>
+            <p>Speak to control your CoreIoT devices and ask for current home conditions. Voice is processed on your
+                local backend.</p>
+            <p class="hint">Example: "Tell me the condition of the house today" or "set servo 90"</p>
+        </section>
+
+        <section class="panel">
+            <div id="status" class="status">Ready.</div>
+
+            <div class="btn-row">
+                <button id="recordBtn" class="primary">Start Recording</button>
+                <button id="stopBtn" class="secondary" disabled>Stop</button>
+            </div>
+
+            <div>
+                <div class="label">Text fallback command</div>
+                <textarea id="textInput" placeholder="Type command if microphone is unavailable..."></textarea>
+                <div class="btn-row" style="margin-top: 8px;">
+                    <button id="sendTextBtn" class="secondary">Send Text Command</button>
+                </div>
+            </div>
+
+            <div class="result">
+                <div><strong>Transcript:</strong> <span id="transcript">-</span></div>
+                <div style="margin-top: 6px;"><strong>Intent:</strong> <span id="intent">-</span></div>
+                <div style="margin-top: 6px;"><strong>Assistant:</strong> <span id="assistantText">-</span></div>
+                <audio id="player" controls></audio>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        const statusEl = document.getElementById('status');
+        const recordBtn = document.getElementById('recordBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const sendTextBtn = document.getElementById('sendTextBtn');
+        const textInput = document.getElementById('textInput');
+        const transcriptEl = document.getElementById('transcript');
+        const intentEl = document.getElementById('intent');
+        const assistantTextEl = document.getElementById('assistantText');
+        const player = document.getElementById('player');
+
+        let mediaRecorder = null;
+        let chunks = [];
+
+        function setStatus(message, isError = false) {
+            statusEl.textContent = message;
+            statusEl.className = isError ? 'status error' : 'status ok';
+        }
+
+        function renderResult(data) {
+            transcriptEl.textContent = data.transcript || '-';
+            intentEl.textContent = data.intent || '-';
+            assistantTextEl.textContent = data.response_text || '-';
+
+            if (data.audio_url) {
+                player.src = data.audio_url + '?t=' + Date.now();
+                player.play().catch(() => { });
+            } else {
+                player.removeAttribute('src');
+            }
+        }
+
+        async function sendAudio(blob) {
+            setStatus('Processing voice command...');
+            const formData = new FormData();
+            formData.append('audio', blob, 'voice.webm');
+
+            const res = await fetch('/api/voice-turn', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!res.ok) {
+                const errorText = await res.text();
+                throw new Error(errorText || 'Voice request failed');
+            }
+
+            const data = await res.json();
+            renderResult(data);
+            setStatus('Completed.');
+        }
+
+        async function sendText(text) {
+            setStatus('Processing text command...');
+
+            const res = await fetch('/api/text-turn', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text })
+            });
+
+            if (!res.ok) {
+                const errorText = await res.text();
+                throw new Error(errorText || 'Text request failed');
+            }
+
+            const data = await res.json();
+            renderResult(data);
+            setStatus('Completed.');
+        }
+
+        recordBtn.addEventListener('click', async () => {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                setStatus('Microphone API is not available in this browser.', true);
+                return;
+            }
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                chunks = [];
+                mediaRecorder = new MediaRecorder(stream);
+
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data && event.data.size > 0) chunks.push(event.data);
+                };
+
+                mediaRecorder.onstop = async () => {
+                    stream.getTracks().forEach(track => track.stop());
+                    const blob = new Blob(chunks, { type: 'audio/webm' });
+                    try {
+                        await sendAudio(blob);
+                    } catch (err) {
+                        setStatus(err.message, true);
+                    }
+                };
+
+                mediaRecorder.start();
+                setStatus('Recording... speak now.');
+                recordBtn.disabled = true;
+                stopBtn.disabled = false;
+            } catch (err) {
+                setStatus('Cannot access microphone: ' + err.message, true);
+            }
+        });
+
+        stopBtn.addEventListener('click', () => {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+            }
+            recordBtn.disabled = false;
+            stopBtn.disabled = true;
+        });
+
+        sendTextBtn.addEventListener('click', async () => {
+            const text = textInput.value.trim();
+            if (!text) {
+                setStatus('Please type a command first.', true);
+                return;
+            }
+
+            try {
+                await sendText(text);
+            } catch (err) {
+                setStatus(err.message, true);
+            }
+        });
+    </script>
+</body>
+
+</html>

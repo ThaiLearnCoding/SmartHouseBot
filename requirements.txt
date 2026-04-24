@@ -1,0 +1,8 @@
+requests
+fastapi
+uvicorn
+python-multipart
+faster-whisper
+python-dotenv
+vosk
+sounddevice

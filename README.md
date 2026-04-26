@@ -64,8 +64,9 @@ Example:
 3. Smart home command parsing (LED, servo, sensor read)
 4. Out-of-domain fallback (for unrelated questions)
 5. House condition summary with practical advice
-6. Local text-to-speech response with Piper
-7. Text fallback mode when microphone is unavailable
+6. Optional local SLM response rewriting for natural and varied responses (Ollama)
+7. Local text-to-speech response with Piper
+8. Text fallback mode when microphone is unavailable
 
 ---
 
@@ -136,6 +137,7 @@ Fill values in `.env`:
 - `PIPER_PATH`
 - `PIPER_MODEL`
 - Whisper settings (optional)
+- Optional LLM settings (`LLM_ENABLED`, `OLLAMA_MODEL`, ...)
 
 ### 8.3 Run web server
 
@@ -168,6 +170,30 @@ Some parts cannot be auto-installed by this project code:
 3. **Piper voice model (.onnx)**
 4. Browser microphone permission
 5. HTTPS if testing microphone on non-localhost domains/devices
+6. **Ollama + one local model** (only if you enable `LLM_ENABLED=true`)
+
+### Optional: Enable local SLM for natural diverse outputs
+
+1. Install Ollama locally.
+2. Pull a small model, for example:
+
+```powershell
+ollama pull qwen2.5:3b-instruct
+```
+
+1. Update `.env`:
+
+```text
+LLM_ENABLED=true
+LLM_BACKEND=ollama
+OLLAMA_URL=http://127.0.0.1:11434
+OLLAMA_MODEL=qwen2.5:3b-instruct
+LLM_TEMPERATURE=0.8
+```
+
+1. Restart the web server.
+
+With this mode enabled, device intent routing remains rule-based for safety, while final spoken responses become more natural and varied.
 
 ---
 

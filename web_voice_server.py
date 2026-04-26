@@ -8,6 +8,7 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
+import requests
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -185,6 +186,56 @@ def run_piper_tts(text: str) -> Optional[str]:
     return f"/audio/{output_name}"
 
 
+def llm_enabled() -> bool:
+    return os.getenv("LLM_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def maybe_natural_response(intent: str, user_text: str, base_response: str) -> str:
+    if not llm_enabled():
+        return base_response
+
+    backend = os.getenv("LLM_BACKEND", "ollama").strip().lower()
+    if backend != "ollama":
+        return base_response
+
+    ollama_url = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
+    ollama_model = os.getenv("OLLAMA_MODEL", "qwen2.5:3b-instruct")
+    llm_temperature = float(os.getenv("LLM_TEMPERATURE", "0.8"))
+    llm_timeout = float(os.getenv("LLM_TIMEOUT_SECONDS", "15"))
+
+    prompt = (
+        "You are a smart-home voice assistant. "
+        "Rewrite the base assistant response to sound natural and conversational. "
+        "Keep factual values exactly unchanged (numbers, units, state, angle). "
+        "Do not add new facts and do not change action results. "
+        "Keep it concise, 1-3 sentences. "
+        f"Intent: {intent}\n"
+        f"User request: {user_text}\n"
+        f"Base response: {base_response}\n"
+        "Return only the final response text."
+    )
+
+    payload = {
+        "model": ollama_model,
+        "prompt": prompt,
+        "stream": False,
+        "options": {
+            "temperature": llm_temperature,
+        },
+    }
+
+    try:
+        response = requests.post(f"{ollama_url}/api/generate", json=payload, timeout=llm_timeout)
+        response.raise_for_status()
+        candidate = response.json().get("response", "").strip()
+        if candidate:
+            return candidate
+    except Exception:
+        return base_response
+
+    return base_response
+
+
 def get_controller() -> CoreIotRpcController:
     email = os.getenv("COREIOT_EMAIL", "").strip()
     password = os.getenv("COREIOT_PASSWORD", "").strip()
@@ -204,6 +255,7 @@ def execute_user_text(user_text: str) -> AssistantResult:
 
     if intent == "empty":
         response_text = "I could not hear anything. Please try again."
+        response_text = maybe_natural_response(intent, user_text, response_text)
         return AssistantResult(transcript=user_text, intent=intent, response_text=response_text, audio_url=run_piper_tts(response_text))
 
     if intent == "out_of_domain":
@@ -211,10 +263,12 @@ def execute_user_text(user_text: str) -> AssistantResult:
             "I can only help with smart-home tasks, such as reading temperature and humidity "
             "or controlling devices like LED and servo."
         )
+        response_text = maybe_natural_response(intent, user_text, response_text)
         return AssistantResult(transcript=user_text, intent=intent, response_text=response_text, audio_url=run_piper_tts(response_text))
 
     if intent == "need_clarification":
         response_text = payload["question"]
+        response_text = maybe_natural_response(intent, user_text, response_text)
         return AssistantResult(transcript=user_text, intent=intent, response_text=response_text, audio_url=run_piper_tts(response_text))
 
     controller = get_controller()
@@ -223,12 +277,14 @@ def execute_user_text(user_text: str) -> AssistantResult:
         state = payload["on"]
         controller.set_led(state)
         response_text = "The LED is now on." if state else "The LED is now off."
+        response_text = maybe_natural_response(intent, user_text, response_text)
         return AssistantResult(transcript=user_text, intent=intent, response_text=response_text, audio_url=run_piper_tts(response_text))
 
     if intent == "set_servo":
         angle = payload["angle"]
         controller.set_servo(angle)
         response_text = f"Servo is set to {angle} degrees."
+        response_text = maybe_natural_response(intent, user_text, response_text)
         return AssistantResult(transcript=user_text, intent=intent, response_text=response_text, audio_url=run_piper_tts(response_text))
 
     if intent in {"read_sensor", "house_summary"}:
@@ -241,9 +297,12 @@ def execute_user_text(user_text: str) -> AssistantResult:
         else:
             response_text = f"Current temperature is {temp} degrees Celsius and humidity is {humi} percent."
 
+        response_text = maybe_natural_response(intent, user_text, response_text)
+
         return AssistantResult(transcript=user_text, intent=intent, response_text=response_text, audio_url=run_piper_tts(response_text))
 
     response_text = "I could not understand your command."
+    response_text = maybe_natural_response("unknown", user_text, response_text)
     return AssistantResult(transcript=user_text, intent="unknown", response_text=response_text, audio_url=run_piper_tts(response_text))
 
 
@@ -258,6 +317,9 @@ def health_check():
         "status": "ok",
         "whisper_available": WhisperModel is not None,
         "piper_model_configured": bool(os.getenv("PIPER_MODEL", "")),
+        "llm_enabled": llm_enabled(),
+        "llm_backend": os.getenv("LLM_BACKEND", "ollama"),
+        "ollama_model": os.getenv("OLLAMA_MODEL", "qwen2.5:3b-instruct"),
     }
 
 

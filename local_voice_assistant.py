@@ -6,9 +6,13 @@ import string
 import sys
 import time
 import unicodedata
+import logging
 from getpass import getpass
+from typing import Optional
 
 from coreiot_rpc_controller import CoreIotRpcController
+
+logger = logging.getLogger(__name__)
 
 try:
     import sounddevice as sd
@@ -18,7 +22,7 @@ except Exception:
     VOSK_AVAILABLE = False
 
 
-def prompt_if_missing(value: str | None, label: str, secret: bool = False) -> str:
+def prompt_if_missing(value: Optional[str], label: str, secret: bool = False) -> str:
     if value:
         return value
 
@@ -154,7 +158,7 @@ def run_voice_loop(controller: CoreIotRpcController, model_path: str):
     try:
         listener = VoskMicListener(model_path=model_path)
     except Exception as exc:
-        print(f"Could not load Vosk model at '{model_path}': {exc}")
+        logger.error(f"Could not load Vosk model at '{model_path}'", exc_info=True)
         print("Falling back to text mode.")
         run_text_loop(controller)
         return
@@ -175,6 +179,7 @@ def run_voice_loop(controller: CoreIotRpcController, model_path: str):
 
 
 def main():
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     parser = argparse.ArgumentParser(description="Local voice assistant for CoreIoT smart home")
     parser.add_argument("--email", help="CoreIoT email")
     parser.add_argument("--password", help="CoreIoT password")
@@ -203,7 +208,7 @@ def main():
     try:
         controller = CoreIotRpcController(email=email, password=password, device_id=args.device_id)
     except Exception as exc:
-        print(f"Failed to initialize CoreIoT controller: {exc}")
+        logger.error("Failed to initialize CoreIoT controller", exc_info=True)
         sys.exit(1)
 
     if args.mode == "voice":

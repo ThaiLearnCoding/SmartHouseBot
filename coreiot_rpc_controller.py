@@ -2,7 +2,11 @@ import requests
 import argparse
 import sys
 import time
+import logging
 from getpass import getpass
+from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 class CoreIotRpcController:
     def __init__(self, email: str, password: str, device_id: str):
@@ -27,9 +31,9 @@ class CoreIotRpcController:
             if not self.token:
                 raise Exception("No token in response")
             
-            print("✓ Login successful")
+            logger.info("✓ Login successful")
         except Exception as e:
-            print(f"✗ Login error: {e}")
+            logger.error("✗ Login error", exc_info=True)
             raise
 
     def send_rpc(self, method: str, params) -> dict:
@@ -50,13 +54,13 @@ class CoreIotRpcController:
             response = requests.post(url, json=payload, headers=headers, timeout=10)
             if response.status_code == 200:
                 result = response.json()
-                print(f"✓ RPC sent: {method}({params}) -> {result}")
+                logger.info(f"✓ RPC sent: {method}({params}) -> {result}")
                 return result
             else:
-                print(f"✗ RPC failed with status {response.status_code}: {response.text}")
+                logger.error(f"✗ RPC failed with status {response.status_code}: {response.text}")
                 return {}
         except Exception as e:
-            print(f"✗ RPC error: {e}")
+            logger.error("✗ RPC error", exc_info=True)
             return {}
 
     def set_led(self, on: bool):
@@ -81,7 +85,7 @@ class CoreIotRpcController:
         try:
             response = requests.get(url, headers=headers, params=params, timeout=10)
             if response.status_code != 200:
-                print(f"RPC telemetry read failed with status {response.status_code}: {response.text}")
+                logger.error(f"RPC telemetry read failed with status {response.status_code}: {response.text}")
                 return {}
 
             raw = response.json()
@@ -91,15 +95,15 @@ class CoreIotRpcController:
                     latest[key] = raw[key][0].get("value")
 
             if not latest:
-                print("No telemetry yet for temperature/humidity")
+                logger.info("No telemetry yet for temperature/humidity")
                 return {}
 
             temp = latest.get("temperature", "N/A")
             humi = latest.get("humidity", "N/A")
-            print(f"Sensor -> temperature={temp}, humidity={humi}")
+            logger.info(f"Sensor -> temperature={temp}, humidity={humi}")
             return latest
         except Exception as e:
-            print(f"Telemetry read error: {e}")
+            logger.error("Telemetry read error", exc_info=True)
             return {}
 
 
@@ -114,7 +118,7 @@ def print_help():
     print("  exit                    Quit program\n")
 
 
-def prompt_if_missing(value: str | None, label: str, secret: bool = False) -> str:
+def prompt_if_missing(value: Optional[str], label: str, secret: bool = False) -> str:
     if value:
         return value
 
@@ -127,6 +131,7 @@ def prompt_if_missing(value: str | None, label: str, secret: bool = False) -> st
 
 
 def main():
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     parser = argparse.ArgumentParser(description="CoreIoT Server-side RPC Controller")
     parser.add_argument("--email", help="CoreIoT email")
     parser.add_argument("--password", help="CoreIoT password")

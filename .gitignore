@@ -21,6 +21,8 @@ dist/
 .eggs/
 node_modules/
 frontend/dist/
+frontend/node_modules/
+.pycache/
 
 # Test and tooling caches
 .pytest_cache/

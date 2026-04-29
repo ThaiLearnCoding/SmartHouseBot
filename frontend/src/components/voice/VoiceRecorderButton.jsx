@@ -40,7 +40,8 @@ export default function VoiceRecorderButton({ isRecording, isProcessing, onRecor
   return (
     <button
       type="button"
-      className={`btn ${isRecording ? "btn-error" : "btn-primary"}`}
+      className="bmw-button-primary"
+      style={isRecording ? { backgroundColor: 'var(--color-error)' } : {}}
       disabled={isProcessing}
       onClick={isRecording ? stopRecording : startRecording}
     >

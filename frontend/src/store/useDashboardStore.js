@@ -9,6 +9,8 @@ import {
 } from "../services/dashboardApi";
 import { getApiErrorMessage } from "../lib/axios";
 
+let dashboardErrorTimeout = null;
+
 export const useDashboardStore = create((set, get) => ({
   health: null,
   latest: null,
@@ -17,6 +19,16 @@ export const useDashboardStore = create((set, get) => ({
   rangeHours: 24,
   isLoading: false,
   error: null,
+
+  setError: (errorMsg) => {
+    if (dashboardErrorTimeout) clearTimeout(dashboardErrorTimeout);
+    set({ error: errorMsg });
+    if (errorMsg) {
+      dashboardErrorTimeout = setTimeout(() => {
+        set({ error: null });
+      }, 10000);
+    }
+  },
 
   loadDashboard: async () => {
     set({ isLoading: true, error: null });
@@ -36,7 +48,8 @@ export const useDashboardStore = create((set, get) => ({
         isLoading: false,
       });
     } catch (error) {
-      set({ error: getApiErrorMessage(error, "Failed to load dashboard."), isLoading: false });
+      get().setError(getApiErrorMessage(error, "Failed to load dashboard."));
+      set({ isLoading: false });
     }
   },
 
@@ -46,28 +59,44 @@ export const useDashboardStore = create((set, get) => ({
       const history = await fetchTelemetryHistory(rangeHours);
       set({ history: history.points ?? [], isLoading: false });
     } catch (error) {
-      set({ error: getApiErrorMessage(error, "Failed to load telemetry history."), isLoading: false });
+      get().setError(getApiErrorMessage(error, "Failed to load telemetry history."));
+      set({ isLoading: false });
     }
   },
 
   updateLed: async (on) => {
+    const prevStatus = get().deviceStatus;
+    
+    // Optimistic UI update
+    set({
+      deviceStatus: {
+        ...prevStatus,
+        led_on: on,
+      },
+      isLoading: true
+    });
+
     try {
       const result = await setLedState(on);
-      set({ deviceStatus: result.status });
+      set({ deviceStatus: result.status, isLoading: false });
       return result;
     } catch (error) {
-      set({ error: getApiErrorMessage(error, "Failed to update LED.") });
+      // Revert on error
+      set({ deviceStatus: prevStatus, isLoading: false });
+      get().setError(getApiErrorMessage(error, "Failed to update LED."));
       return null;
     }
   },
 
   updateServo: async (angle) => {
+    set({ isLoading: true });
     try {
       const result = await setServoAngle(angle);
-      set({ deviceStatus: result.status });
+      set({ deviceStatus: result.status, isLoading: false });
       return result;
     } catch (error) {
-      set({ error: getApiErrorMessage(error, "Failed to update servo.") });
+      set({ isLoading: false });
+      get().setError(getApiErrorMessage(error, "Failed to update servo."));
       return null;
     }
   },

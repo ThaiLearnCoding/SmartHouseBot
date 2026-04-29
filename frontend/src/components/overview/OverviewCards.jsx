@@ -2,12 +2,16 @@ import { formatHumidity, formatTemperature } from "../../lib/utils";
 
 function OverviewCard({ title, value, subtitle }) {
   return (
-    <div className="card bg-base-100 shadow-sm">
-      <div className="card-body">
-        <p className="text-sm text-base-content/60">{title}</p>
-        <h2 className="text-3xl font-semibold">{value}</h2>
-        <p className="text-sm text-base-content/60">{subtitle}</p>
-      </div>
+    <div 
+      className="flex flex-col p-6"
+      style={{ 
+        backgroundColor: 'var(--color-surface-card)', 
+        border: '1px solid var(--color-hairline)'
+      }}
+    >
+      <p className="bmw-body-sm mb-2" style={{ color: 'var(--color-muted)' }}>{title}</p>
+      <h2 className="bmw-display-md mb-2" style={{ color: 'var(--color-ink)' }}>{value}</h2>
+      <p className="bmw-caption" style={{ color: 'var(--color-muted)' }}>{subtitle}</p>
     </div>
   );
 }

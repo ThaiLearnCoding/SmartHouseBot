@@ -11,13 +11,25 @@ function buildMessage(role, text, extra = {}) {
   };
 }
 
-export const useVoiceAssistantStore = create((set) => ({
+let voiceErrorTimeout = null;
+
+export const useVoiceAssistantStore = create((set, get) => ({
   messages: [],
   isRecording: false,
   isProcessing: false,
   currentTranscript: "",
   activeAudioUrl: null,
   error: null,
+
+  setError: (errorMsg) => {
+    if (voiceErrorTimeout) clearTimeout(voiceErrorTimeout);
+    set({ error: errorMsg });
+    if (errorMsg) {
+      voiceErrorTimeout = setTimeout(() => {
+        set({ error: null });
+      }, 5000);
+    }
+  },
 
   setRecording: (isRecording) => set({ isRecording }),
 
@@ -31,6 +43,7 @@ export const useVoiceAssistantStore = create((set) => ({
       isProcessing: true,
       error: null,
     }));
+    if (voiceErrorTimeout) clearTimeout(voiceErrorTimeout);
 
     try {
       const result = await sendTextTurn(trimmed);
@@ -47,21 +60,26 @@ export const useVoiceAssistantStore = create((set) => ({
         isProcessing: false,
       }));
     } catch (error) {
-      set({
-        error: getApiErrorMessage(error, "Failed to process text command."),
-        isProcessing: false,
-      });
+      get().setError(getApiErrorMessage(error, "Failed to process text command."));
+      set({ isProcessing: false });
     }
   },
 
   submitAudio: async (blob) => {
-    set({ isProcessing: true, error: null });
+    const tempMessageId = `user-temp-${Date.now()}`;
+    set((state) => ({ 
+      messages: [...state.messages, { id: tempMessageId, role: "user", text: "[Đang phân tích lệnh...]" }],
+      isProcessing: true, 
+      error: null 
+    }));
+    if (voiceErrorTimeout) clearTimeout(voiceErrorTimeout);
+
     try {
       const result = await sendAudioTurn(blob);
       set((state) => ({
         messages: [
-          ...state.messages,
-          buildMessage("user", result.transcript || "Voice input", { transcriptOnly: true }),
+          ...state.messages.filter(m => m.id !== tempMessageId),
+          buildMessage("user", result.transcript || "Invalid command...", { transcriptOnly: true }),
           buildMessage("assistant", result.response_text, {
             transcript: result.transcript,
             intent: result.intent,
@@ -73,10 +91,11 @@ export const useVoiceAssistantStore = create((set) => ({
         isProcessing: false,
       }));
     } catch (error) {
-      set({
-        error: getApiErrorMessage(error, "Failed to process voice command."),
-        isProcessing: false,
-      });
+      set((state) => ({
+        messages: state.messages.filter(m => m.id !== tempMessageId)
+      }));
+      get().setError(getApiErrorMessage(error, "Failed to process voice command."));
+      set({ isProcessing: false });
     }
   },
 }));

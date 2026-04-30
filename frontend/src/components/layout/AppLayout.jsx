@@ -13,6 +13,13 @@ export default function AppLayout() {
 
   useEffect(() => {
     loadDashboard();
+    
+    // Set up polling for near real-time updates every 5 seconds
+    const interval = setInterval(() => {
+      useDashboardStore.getState().refreshDashboard();
+    }, 5000);
+    
+    return () => clearInterval(interval);
   }, [loadDashboard]);
 
   useEffect(() => {

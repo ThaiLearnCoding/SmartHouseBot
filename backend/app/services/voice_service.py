@@ -81,23 +81,29 @@ def maybe_natural_response(intent: str, user_text: str, base_response: str) -> s
     if not settings.llm_enabled or settings.llm_backend.strip().lower() != "ollama":
         return base_response
 
+    system_prompt = (
+        "Bạn là trợ lý nhà thông minh. QUY TẮC TỐI THƯỢNG: Chỉ được phép trả lời bằng TIẾNG VIỆT (Vietnamese). "
+        "Tuyệt đối KHÔNG sử dụng tiếng Trung, tiếng Anh, tiếng Indonesia hay bất kỳ ngôn ngữ nào khác. "
+        "Nhiệm vụ: Viết lại câu trả lời gốc sao cho tự nhiên, thân thiện và dễ hiểu. "
+        "Phải giữ nguyên chính xác các thông số (nhiệt độ, độ ẩm, góc servo, trạng thái bật/tắt). "
+        "Chỉ trả về nội dung câu trả lời cuối cùng, không giải thích gì thêm."
+    )
+
     prompt = (
-        "Bạn là trợ lý giọng nói cho nhà thông minh và luôn trả lời bằng tiếng Việt. "
-        "Viết lại câu trả lời gốc sao cho tự nhiên và dễ hiểu. "
-        "Giữ nguyên chính xác các giá trị thực tế như số, đơn vị, trạng thái và góc servo. "
-        "Không thêm thông tin mới và không thay đổi kết quả hành động. "
-        "Trả lời ngắn gọn trong 1 đến 3 câu. "
-        f"Intent: {intent}\n"
-        f"Yêu cầu của người dùng: {user_text}\n"
-        f"Câu trả lời gốc: {base_response}\n"
-        "Chỉ trả về câu trả lời cuối cùng bằng tiếng Việt."
+        f"Lệnh của người dùng: {user_text}\n"
+        f"Câu trả lời gốc: {base_response}\n\n"
+        "Hãy viết lại câu trả lời gốc bằng TIẾNG VIỆT:"
     )
 
     payload = {
         "model": settings.ollama_model,
+        "system": system_prompt,
         "prompt": prompt,
         "stream": False,
-        "options": {"temperature": settings.llm_temperature},
+        "options": {
+            "temperature": 0.1,  # Lowered to heavily reduce hallucinations
+            "top_p": 0.5
+        },
     }
 
     try:

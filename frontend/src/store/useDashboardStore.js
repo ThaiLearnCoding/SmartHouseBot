@@ -26,7 +26,7 @@ export const useDashboardStore = create((set, get) => ({
     if (errorMsg) {
       dashboardErrorTimeout = setTimeout(() => {
         set({ error: null });
-      }, 10000);
+      }, 5000);
     }
   },
 
@@ -50,6 +50,28 @@ export const useDashboardStore = create((set, get) => ({
     } catch (error) {
       get().setError(getApiErrorMessage(error, "Failed to load dashboard."));
       set({ isLoading: false });
+    }
+  },
+
+  refreshDashboard: async () => {
+    // Silent refresh without setting isLoading
+    try {
+      const [health, latest, history, deviceStatus] = await Promise.all([
+        fetchHealth(),
+        fetchLatestTelemetry(),
+        fetchTelemetryHistory(get().rangeHours),
+        fetchDeviceStatus(),
+      ]);
+
+      set((state) => ({
+        health,
+        latest,
+        history: history.points ?? [],
+        // Preserve optimistic UI state if an action is currently processing
+        deviceStatus: state.isLoading ? state.deviceStatus : (deviceStatus ?? latest?.device_status ?? null),
+      }));
+    } catch (error) {
+      console.warn("Background refresh failed:", error);
     }
   },
 
@@ -89,13 +111,24 @@ export const useDashboardStore = create((set, get) => ({
   },
 
   updateServo: async (angle) => {
-    set({ isLoading: true });
+    const prevStatus = get().deviceStatus;
+
+    // Optimistic UI update
+    set({
+      deviceStatus: {
+        ...prevStatus,
+        servo_angle: angle,
+      },
+      isLoading: true
+    });
+
     try {
       const result = await setServoAngle(angle);
       set({ deviceStatus: result.status, isLoading: false });
       return result;
     } catch (error) {
-      set({ isLoading: false });
+      // Revert on error
+      set({ deviceStatus: prevStatus, isLoading: false });
       get().setError(getApiErrorMessage(error, "Failed to update servo."));
       return null;
     }

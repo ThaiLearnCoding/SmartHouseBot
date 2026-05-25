@@ -46,6 +46,11 @@ class Settings(BaseSettings):
     hf_token: str = Field(default="", alias="HF_TOKEN")
     hf_home: str = Field(default="", alias="HF_HOME")
     hf_hub_offline: bool = Field(default=False, alias="HF_HUB_OFFLINE")
+    transformers_offline: bool = Field(default=False, alias="TRANSFORMERS_OFFLINE")
+    hf_disable_safetensors_conversion: bool = Field(
+        default=False,
+        alias="HF_HUB_DISABLE_SAFETENSORS_CONVERSION",
+    )
 
     piper_model: str = Field(default="", alias="PIPER_MODEL")
 

@@ -1,3 +1,4 @@
+import io
 import logging
 import uuid
 import wave
@@ -55,6 +56,42 @@ class TtsService:
             return f"/audio/{output_name}"
         except Exception:
             logger.error("Piper synthesis failed", exc_info=True)
+            return None
+
+    def synthesize_chunks(self, text: str, chunk_seconds: float = 0.6) -> Optional[list[bytes]]:
+        if not text.strip():
+            text = "I did not catch that."
+
+        try:
+            voice = self._get_voice()
+            buffer = io.BytesIO()
+            with wave.open(buffer, "wb") as wav_file:
+                voice.synthesize_wav(text, wav_file)
+
+            buffer.seek(0)
+            with wave.open(buffer, "rb") as wav_reader:
+                params = wav_reader.getparams()
+                sample_rate = wav_reader.getframerate()
+                frames_per_chunk = max(1, int(sample_rate * chunk_seconds))
+                chunks: list[bytes] = []
+
+                while True:
+                    frames = wav_reader.readframes(frames_per_chunk)
+                    if not frames:
+                        break
+
+                    chunk_buffer = io.BytesIO()
+                    with wave.open(chunk_buffer, "wb") as chunk_writer:
+                        chunk_writer.setnchannels(params.nchannels)
+                        chunk_writer.setsampwidth(params.sampwidth)
+                        chunk_writer.setframerate(params.framerate)
+                        chunk_writer.writeframes(frames)
+
+                    chunks.append(chunk_buffer.getvalue())
+
+            return chunks
+        except Exception:
+            logger.error("Piper chunked synthesis failed", exc_info=True)
             return None
 
 

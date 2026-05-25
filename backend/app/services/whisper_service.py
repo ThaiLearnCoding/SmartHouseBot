@@ -47,6 +47,13 @@ class WhisperService:
         if self._pipeline is None:
             if self.settings.hf_hub_offline and not os.environ.get("HF_HUB_OFFLINE"):
                 os.environ["HF_HUB_OFFLINE"] = "1"
+            if self.settings.transformers_offline and not os.environ.get("TRANSFORMERS_OFFLINE"):
+                os.environ["TRANSFORMERS_OFFLINE"] = "1"
+            if (
+                self.settings.hf_disable_safetensors_conversion
+                and not os.environ.get("HF_HUB_DISABLE_SAFETENSORS_CONVERSION")
+            ):
+                os.environ["HF_HUB_DISABLE_SAFETENSORS_CONVERSION"] = "1"
             if self.settings.hf_home.strip() and not os.environ.get("HF_HOME"):
                 os.environ["HF_HOME"] = self.settings.hf_home.strip()
             if self.settings.hf_token.strip() and not os.environ.get("HF_TOKEN"):

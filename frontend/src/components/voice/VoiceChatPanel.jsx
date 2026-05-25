@@ -1,5 +1,5 @@
 import { useState } from "react";
-import AudioReplyPlayer from "./AudioReplyPlayer";
+import StreamingAudioPlayer from "./StreamingAudioPlayer";
 import ChatMessageList from "./ChatMessageList";
 import VoiceRecorderButton from "./VoiceRecorderButton";
 
@@ -8,7 +8,8 @@ export default function VoiceChatPanel({
   isRecording,
   isProcessing,
   currentTranscript,
-  activeAudioUrl,
+  audioChunks,
+  onChunkPlayed,
   error,
   onRecordingChange,
   onAudioReady,
@@ -41,10 +42,10 @@ export default function VoiceChatPanel({
             onRecordingChange={onRecordingChange}
             onAudioReady={onAudioReady}
           />
-          <span 
-            className="bmw-caption px-3 py-1" 
-            style={{ 
-              border: '1px solid var(--color-hairline-strong)', 
+          <span
+            className="bmw-caption px-3 py-1"
+            style={{
+              border: '1px solid var(--color-hairline-strong)',
               backgroundColor: 'var(--color-canvas)',
               color: 'var(--color-ink)'
             }}
@@ -71,14 +72,14 @@ export default function VoiceChatPanel({
         </form>
 
         {error ? (
-          <div 
-            className="p-4" 
+          <div
+            className="p-4"
             style={{ backgroundColor: 'var(--color-error)', color: 'var(--color-on-dark)' }}
           >
             {error}
           </div>
         ) : null}
-        <AudioReplyPlayer audioUrl={activeAudioUrl} />
+        <StreamingAudioPlayer audioChunks={audioChunks} onChunkPlayed={onChunkPlayed} />
       </div>
     </div>
   );

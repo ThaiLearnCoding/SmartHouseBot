@@ -82,10 +82,10 @@ def _repair_intent_json(raw: str, user_text: str) -> Optional[dict]:
 
 def _build_intent_prompt(user_text: str) -> str:
     return (
-        "Bạn là bộ phân tích ý định cho trợ lý nhà thông minh. "
+        "Bạn là bộ chọn công cụ cho trợ lý nhà thông minh. "
         "Trả về JSON duy nhất với các trường: intent, params, confidence. "
         "Không thêm giải thích, không thêm Markdown. "
-        "intent chỉ được là một trong: "
+        "intent chính là tên công cụ cần dùng và chỉ được là một trong: "
         "set_led, set_servo, device_status, read_sensor, house_summary, need_clarification, out_of_domain, chitchat. "
         "params phải là object JSON, dùng các khóa sau: "
         "set_led -> {\"on\": true|false}; set_servo -> {\"angle\": 0..180}. "

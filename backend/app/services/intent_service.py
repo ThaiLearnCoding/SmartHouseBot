@@ -3,6 +3,8 @@ import string
 import unicodedata
 from typing import Dict, Tuple
 
+# Deprecated: rule-based intent parsing is no longer used in the voice flow.
+
 
 def normalize_text(text: str) -> str:
     normalized = text.lower().strip()
@@ -55,7 +57,6 @@ def parse_intent(user_text: str) -> Tuple[str, Dict]:
         "nhiet do hien tai",
         "do am hien tai",
         "bao nhieu do",
-        "bao nhieu do c",
         "bao nhieu do c",
         "nong",
         "lanh",

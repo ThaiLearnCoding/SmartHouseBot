@@ -10,7 +10,6 @@ from backend.app.core.config import get_settings
 from backend.app.core.audit import write_audit_event
 from backend.app.schemas.voice import AssistantResult
 from backend.app.services.coreiot_service import coreiot_service
-from backend.app.services.intent_service import parse_intent
 from backend.app.services.llm_service import decide_intent, generate_response_text, stream_response_text
 from backend.app.services.tts_service import tts_service
 from backend.app.services.whisper_service import whisper_service
@@ -80,40 +79,16 @@ def build_house_advice(temp_value, humidity_value) -> str:
 
 
 class VoiceService:
-    def _looks_like_sensor_query(self, user_text: str) -> bool:
-        normalized = user_text.lower()
-        return any(key in normalized for key in [
-            "nhiet do",
-            "do am",
-            "temperature",
-            "humidity",
-            "bao nhieu do",
-            "nong",
-            "lanh",
-            "thoi tiet",
-        ])
-    def _looks_like_status_query(self, user_text: str) -> bool:
-        normalized = user_text.lower()
-        return any(key in normalized for key in [
-            "trang thai",
-            "hien tai",
-            "dang the nao",
-            "dang ra sao",
-            "bat hay tat",
-            "bao nhieu",
-        ])
-
     def _resolve_intent(self, user_text: str) -> tuple[str, dict, str]:
+        if not user_text.strip():
+            return "empty", {}, "local"
+
         settings = get_settings()
         if settings.llm_enabled and settings.llm_intent_enabled and settings.llm_backend.strip().lower() == "ollama":
             decision = decide_intent(user_text)
             if decision and decision.confidence >= settings.llm_confidence_threshold:
                 intent = decision.intent
                 params = decision.params or {}
-                if self._looks_like_sensor_query(user_text) and intent in {"out_of_domain", "chitchat", "need_clarification"}:
-                    return "read_sensor", {}, "rule_override"
-                if intent in {"set_led", "set_servo"} and self._looks_like_status_query(user_text):
-                    return "device_status", {"device": "all"}, "llm_override"
                 if intent == "set_led" and isinstance(params.get("on"), bool):
                     return intent, params, "llm"
                 if intent == "set_servo":
@@ -131,9 +106,16 @@ class VoiceService:
                     return intent, params, "llm"
                 if intent in {"read_sensor", "house_summary", "out_of_domain", "chitchat", "need_clarification"}:
                     return intent, params, "llm"
+            return "need_clarification", {
+                "question": (
+                    "Bạn muốn tôi làm gì? Ví dụ: đọc nhiệt độ/độ ẩm, bật/tắt đèn, "
+                    "hoặc xoay servo đến một góc cụ thể."
+                )
+            }, "llm_low_confidence"
 
-        intent, params = parse_intent(user_text)
-        return intent, params, "rule"
+        return "need_clarification", {
+            "question": "Tôi chưa sẵn sàng xử lý lệnh lúc này. Bạn vui lòng thử lại sau ít phút."
+        }, "llm_unavailable"
 
     def _build_response_text(self, user_text: str) -> tuple[str, str, str]:
         intent, payload, source = self._resolve_intent(user_text)

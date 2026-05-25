@@ -6,7 +6,7 @@ export default function DeviceControlPanel({ deviceStatus, onToggleLed, onCommit
     <div className="bmw-card" style={{ border: '1px solid var(--color-hairline)' }}>
       <div className="bmw-card-header">
         <div className="flex items-center justify-between">
-          <h2 className="bmw-card-title">Device Control Center</h2>
+          <h2 className="bmw-card-title">Trung tâm điều khiển</h2>
           {busy && (
             <span className="bmw-caption flex items-center gap-2" style={{ color: 'var(--color-primary)' }}>
               <span className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: 'var(--color-primary)' }}></span>

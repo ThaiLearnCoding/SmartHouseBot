@@ -29,6 +29,7 @@ def test_history_uses_range_query_and_returns_points(client, monkeypatch):
         captured["range_hours"] = range_hours
         return {
             "range_hours": range_hours,
+            "sample_interval_seconds": 60,
             "points": [
                 {
                     "timestamp": 1714290000000,

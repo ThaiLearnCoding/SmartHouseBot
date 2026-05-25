@@ -72,10 +72,25 @@ class Settings(BaseSettings):
 
     telemetry_default_hours: int = Field(default=24, alias="TELEMETRY_DEFAULT_HOURS")
     telemetry_max_hours: int = Field(default=72, alias="TELEMETRY_MAX_HOURS")
-    telemetry_limit_points: int = Field(default=288, alias="TELEMETRY_LIMIT_POINTS")
+    telemetry_history_buckets: int = Field(
+        default=576,
+        alias="TELEMETRY_HISTORY_BUCKETS",
+        description="Fixed chart buckets per range. interval = range_span / buckets.",
+    )
     telemetry_device_keys: str = Field(
         default="temperature,humidity,ledState,servoAngle",
         alias="TELEMETRY_DEVICE_KEYS",
+    )
+
+    database_enabled: bool = Field(default=True, alias="DATABASE_ENABLED")
+    database_path: str = Field(default="", alias="DATABASE_PATH")
+    database_telemetry_interval_seconds: int = Field(
+        default=5,
+        alias="DATABASE_TELEMETRY_INTERVAL_SECONDS",
+    )
+    database_telemetry_sampler_enabled: bool = Field(
+        default=True,
+        alias="DATABASE_TELEMETRY_SAMPLER_ENABLED",
     )
 
     def get_cors_origins(self) -> List[str]:
@@ -94,6 +109,12 @@ class Settings(BaseSettings):
             return f"vinai/PhoWhisper-{size}"
 
         return "vinai/PhoWhisper-small"
+
+    @property
+    def database_dir(self) -> Path:
+        path = BASE_DIR / "backend" / "data"
+        path.mkdir(parents=True, exist_ok=True)
+        return path
 
     @property
     def frontend_dist_dir(self) -> Path:

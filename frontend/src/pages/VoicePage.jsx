@@ -27,7 +27,7 @@ export default function VoicePage() {
         }}
       >
         <div className="max-w-[1440px] mx-auto">
-          <h1 className="bmw-display-lg" style={{ color: 'var(--color-ink)' }}>VOICE ASSISTANT</h1>
+          <h1 className="bmw-display-lg" style={{ color: "var(--color-ink)" }}>TRỢ LÝ GIỌNG NÓI</h1>
         </div>
       </div>
 

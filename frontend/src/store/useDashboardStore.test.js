@@ -17,10 +17,11 @@ import {
   setLedState,
   setServoAngle,
 } from "../services/dashboardApi";
-import { useDashboardStore } from "./useDashboardStore";
+import { useDashboardStore, resetHistoryBuffers } from "./useDashboardStore";
 
 describe("useDashboardStore", () => {
   beforeEach(() => {
+    resetHistoryBuffers();
     useDashboardStore.setState({
       health: null,
       latest: null,
@@ -41,7 +42,6 @@ describe("useDashboardStore", () => {
       device_status: { led_on: true, servo_angle: 45, active_devices: 2, status_source: "telemetry" },
     });
     fetchTelemetryHistory.mockResolvedValue({ points: [{ timestamp: 1, temperature: 28, humidity: 61 }] });
-    fetchDeviceStatus.mockResolvedValue(null);
 
     await useDashboardStore.getState().loadDashboard();
 
@@ -69,6 +69,20 @@ describe("useDashboardStore", () => {
     const state = useDashboardStore.getState();
     expect(state.rangeHours).toBe(48);
     expect(state.history[0].timestamp).toBe(2);
+  });
+
+  it("reuses cached history when switching back to a recent range", async () => {
+    fetchTelemetryHistory.mockResolvedValue({
+      points: [{ timestamp: 10, temperature: 27, humidity: 60 }],
+      sample_interval_seconds: 150,
+    });
+
+    await useDashboardStore.getState().setRangeHours(24);
+    await useDashboardStore.getState().setRangeHours(48);
+    await useDashboardStore.getState().setRangeHours(24);
+
+    expect(fetchTelemetryHistory).toHaveBeenCalledTimes(2);
+    expect(useDashboardStore.getState().history[0].timestamp).toBe(10);
   });
 
   it("updates led and servo state from mutation responses", async () => {

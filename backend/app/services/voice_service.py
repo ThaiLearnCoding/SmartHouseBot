@@ -8,6 +8,7 @@ from fastapi import HTTPException
 
 from backend.app.core.config import get_settings
 from backend.app.core.audit import write_audit_event
+from backend.app.db.repository import storage_repository
 from backend.app.schemas.voice import AssistantResult
 from backend.app.services.coreiot_service import coreiot_service
 from backend.app.services.llm_service import decide_intent, generate_response_text, stream_response_text
@@ -170,7 +171,7 @@ class VoiceService:
 
         if intent == "set_led":
             try:
-                status = coreiot_service.set_led(bool(payload["on"]))
+                status = coreiot_service.set_led(bool(payload["on"]), source="voice")
             except HTTPException as exc:
                 return intent, self._coreiot_failure_result(user_text, intent, exc).response_text, source
             state_text = "bật" if status.led_on else "tắt"
@@ -185,7 +186,7 @@ class VoiceService:
 
         if intent == "set_servo":
             try:
-                status = coreiot_service.set_servo(int(payload["angle"]))
+                status = coreiot_service.set_servo(int(payload["angle"]), source="voice")
             except HTTPException as exc:
                 return intent, self._coreiot_failure_result(user_text, intent, exc).response_text, source
             angle = status.servo_angle if status.servo_angle is not None else int(payload["angle"])
@@ -222,9 +223,27 @@ class VoiceService:
             response_text = f"{response_text} Chi tiết: {detail}"
         return self._result(user_text, intent, response_text)
 
+    def log_interaction(
+        self,
+        transcript: str,
+        intent: str,
+        response_text: str,
+        *,
+        success: bool = True,
+    ) -> None:
+        storage_repository.log_voice_interaction(
+            transcript,
+            intent,
+            response_text,
+            success=success,
+        )
+
     def execute_text(self, user_text: str) -> AssistantResult:
         intent, response_text, _source = self._build_response_text(user_text)
-        return self._result(user_text, intent, response_text)
+        success = not response_text.startswith(COREIOT_UNAVAILABLE_MESSAGE)
+        result = self._result(user_text, intent, response_text)
+        self.log_interaction(user_text, intent, result.response_text, success=success)
+        return result
 
     def stream_response(self, user_text: str) -> tuple[str, Generator[str, None, str]]:
         intent, response_text, _source = self._build_response_text(user_text)

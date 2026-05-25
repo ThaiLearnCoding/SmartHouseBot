@@ -2,7 +2,7 @@ export default function ActiveDevicesCard({ deviceStatus }) {
   return (
     <div className="bmw-card" style={{ border: '1px solid var(--color-hairline)' }}>
       <div className="bmw-card-header">
-        <h2 className="bmw-card-title">Device Overview</h2>
+        <h2 className="bmw-card-title">Tổng quan thiết bị</h2>
       </div>
       <div className="grid gap-4 md:grid-cols-2">
         <div 

@@ -6,7 +6,7 @@
     "node": ">=20.0.0"
   },
   "scripts": {
-    "dev": "concurrently -n backend,frontend -c green,cyan \"sh -c 'if [ -x .venv/bin/python ]; then .venv/bin/python -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload; else python -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload; fi'\" \"npm run dev --prefix frontend -- --host 0.0.0.0 --port 5173\"",
+    "dev": "concurrently -n backend,frontend -c green,cyan \"node scripts/run-backend.mjs\" \"npm run dev --prefix frontend -- --host 0.0.0.0 --port 5173\"",
     "build": "npm install --prefix frontend && npm run build --prefix frontend",
     "start": "python -m uvicorn backend.app.main:app --host 0.0.0.0 --port ${PORT:-8000}",
     "test:backend": ".venv/bin/python -m pytest backend/tests",

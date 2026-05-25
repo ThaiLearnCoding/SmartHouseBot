@@ -25,11 +25,11 @@ class CoreIotClient:
         self.base_url = (base_url or settings.coreiot_base_url).rstrip("/")
         self.timeout_seconds = timeout_seconds or settings.coreiot_timeout_seconds
         self.token: Optional[str] = None
-        self.login()
+        self._session = requests.Session()
 
     def login(self) -> None:
         payload = {"username": self.email, "password": self.password}
-        response = requests.post(
+        response = self._session.post(
             f"{self.base_url}/api/auth/login",
             json=payload,
             timeout=self.timeout_seconds,
@@ -42,6 +42,10 @@ class CoreIotClient:
 
         self.token = token
 
+    def _ensure_logged_in(self) -> None:
+        if not self.token:
+            self.login()
+
     def _auth_headers(self) -> Dict[str, str]:
         if not self.token:
             raise RuntimeError("CoreIoT client is not authenticated.")
@@ -50,14 +54,31 @@ class CoreIotClient:
             "Content-Type": "application/json",
         }
 
+    def _request(self, method: str, url: str, **kwargs: Any) -> requests.Response:
+        self._ensure_logged_in()
+        kwargs.setdefault("timeout", self.timeout_seconds)
+
+        headers = dict(kwargs.pop("headers", {}))
+        headers.setdefault("Authorization", f"Bearer {self.token}")
+        kwargs["headers"] = headers
+
+        response = self._session.request(method, url, **kwargs)
+        if response.status_code == 401:
+            self.login()
+            headers["Authorization"] = f"Bearer {self.token}"
+            kwargs["headers"] = headers
+            response = self._session.request(method, url, **kwargs)
+
+        response.raise_for_status()
+        return response
+
     def send_rpc(self, method: str, params: Any) -> Dict[str, Any]:
-        response = requests.post(
+        response = self._request(
+            "POST",
             f"{self.base_url}/api/rpc/twoway/{self.device_id}",
             json={"method": method, "params": params},
             headers=self._auth_headers(),
-            timeout=self.timeout_seconds,
         )
-        response.raise_for_status()
         return response.json()
 
     def fetch_timeseries(
@@ -67,6 +88,8 @@ class CoreIotClient:
         end_ts: Optional[int] = None,
         limit: Optional[int] = None,
         order_by: str = "DESC",
+        interval_ms: Optional[int] = None,
+        agg: Optional[str] = None,
     ) -> Dict[str, Any]:
         params: Dict[str, Any] = {"keys": keys}
         if start_ts is not None:
@@ -77,22 +100,24 @@ class CoreIotClient:
             params["limit"] = limit
         if order_by:
             params["orderBy"] = order_by
+        if interval_ms is not None:
+            params["interval"] = interval_ms
+        if agg:
+            params["agg"] = agg
 
-        response = requests.get(
+        response = self._request(
+            "GET",
             f"{self.base_url}/api/plugins/telemetry/DEVICE/{self.device_id}/values/timeseries",
             headers={"Authorization": f"Bearer {self.token}"},
             params=params,
-            timeout=self.timeout_seconds,
         )
-        response.raise_for_status()
         return response.json()
 
     def fetch_attributes(self, keys: str) -> Dict[str, Any]:
-        response = requests.get(
+        response = self._request(
+            "GET",
             f"{self.base_url}/api/plugins/telemetry/DEVICE/{self.device_id}/values/attributes",
             headers={"Authorization": f"Bearer {self.token}"},
             params={"keys": keys},
-            timeout=self.timeout_seconds,
         )
-        response.raise_for_status()
         return response.json()

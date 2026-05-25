@@ -1,5 +1,6 @@
 import io
 import logging
+import time
 import uuid
 import wave
 from pathlib import Path
@@ -9,6 +10,8 @@ from backend.app.core.config import get_settings
 
 
 logger = logging.getLogger(__name__)
+
+_AUDIO_TTL_SECONDS = 3600
 
 try:
     from piper.voice import PiperVoice
@@ -27,6 +30,16 @@ class TtsService:
     @property
     def available(self) -> bool:
         return PiperVoice is not None and bool(self.settings.piper_model)
+
+    def cleanup_old_files(self, max_age_seconds: int = _AUDIO_TTL_SECONDS) -> None:
+        output_dir = self.settings.generated_audio_dir
+        cutoff = time.time() - max_age_seconds
+        for path in output_dir.glob("reply_*.wav"):
+            try:
+                if path.stat().st_mtime < cutoff:
+                    path.unlink(missing_ok=True)
+            except OSError:
+                logger.warning("Failed to delete stale audio file %s", path, exc_info=True)
 
     def _get_voice(self) -> PiperVoice:
         if PiperVoice is None:
@@ -53,6 +66,7 @@ class TtsService:
             if output_path.stat().st_size <= 44:
                 output_path.unlink(missing_ok=True)
                 raise RuntimeError("Piper produced an empty WAV file.")
+            self.cleanup_old_files()
             return f"/audio/{output_name}"
         except Exception:
             logger.error("Piper synthesis failed", exc_info=True)

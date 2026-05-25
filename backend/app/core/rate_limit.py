@@ -16,6 +16,10 @@ class InMemoryRateLimiter:
         while bucket and now - bucket[0] > window_seconds:
             bucket.popleft()
 
+        if not bucket:
+            self._hits.pop(key, None)
+            bucket = self._hits[key]
+
         if len(bucket) >= limit:
             raise HTTPException(
                 status_code=429,

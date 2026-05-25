@@ -43,9 +43,7 @@ export const useVoiceAssistantStore = create((set, get) => ({
 
     connectPromise = new Promise((resolve, reject) => {
       const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-      const host = window.location.hostname;
-      const port = window.location.port && window.location.port !== "8000" ? "8000" : window.location.port;
-      const wsUrl = `${protocol}://${host}${port ? `:${port}` : ""}/api/voice/stream`;
+      const wsUrl = `${protocol}://${window.location.host}/api/voice/stream`;
       voiceSocket = new WebSocket(wsUrl);
 
       voiceSocket.onopen = () => {
@@ -126,7 +124,7 @@ export const useVoiceAssistantStore = create((set, get) => ({
       }));
       voiceSocket.send(JSON.stringify({ type: "user_text", text: trimmed }));
     } catch (error) {
-      get().setError(getApiErrorMessage(error, "Failed to process text command."));
+      get().setError(getApiErrorMessage(error, "Không xử lý được lệnh văn bản."));
       set({ isProcessing: false });
     }
   },
@@ -147,7 +145,7 @@ export const useVoiceAssistantStore = create((set, get) => ({
       set((state) => ({
         messages: [
           ...state.messages.filter(m => m.id !== tempMessageId),
-          buildMessage("user", transcript || "Invalid command...", { transcriptOnly: true }),
+          buildMessage("user", transcript || "Không nhận dạng được lệnh...", { transcriptOnly: true }),
           { id: `assistant-${Date.now()}`, role: "assistant", text: "", isStreaming: true },
         ],
         currentTranscript: transcript,
@@ -159,7 +157,7 @@ export const useVoiceAssistantStore = create((set, get) => ({
       set((state) => ({
         messages: state.messages.filter(m => m.id !== tempMessageId)
       }));
-      get().setError(getApiErrorMessage(error, "Failed to process voice command."));
+      get().setError(getApiErrorMessage(error, "Không xử lý được lệnh giọng nói."));
       set({ isProcessing: false });
     }
   },

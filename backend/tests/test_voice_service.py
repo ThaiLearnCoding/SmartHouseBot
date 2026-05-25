@@ -2,6 +2,7 @@ from types import SimpleNamespace
 
 from fastapi import HTTPException
 
+from backend.app.core.config import get_settings
 from backend.app.schemas.llm import LlmDecision
 from backend.app.services.voice_service import VALID_COMMAND_HINT, voice_service
 
@@ -11,14 +12,19 @@ def test_invalid_voice_command_returns_vietnamese_recommendations(monkeypatch):
         "backend.app.services.voice_service.tts_service",
         SimpleNamespace(synthesize=lambda text: None),
     )
+    monkeypatch.setattr(
+        "backend.app.services.voice_service.decide_intent",
+        lambda text: LlmDecision(intent="out_of_domain", params={}, confidence=0.95),
+    )
+    monkeypatch.setenv("LLM_ENABLED", "true")
+    monkeypatch.setenv("LLM_INTENT_ENABLED", "true")
+    get_settings.cache_clear()
 
     result = voice_service.execute_text("play music")
 
     assert result.intent == "out_of_domain"
     assert "Tôi chỉ hỗ trợ" in result.response_text
     assert VALID_COMMAND_HINT in result.response_text
-    assert "bật đèn" in result.response_text
-    assert "servo 90 độ" in result.response_text
 
 
 def test_led_command_returns_vietnamese_response(monkeypatch):
@@ -27,9 +33,16 @@ def test_led_command_returns_vietnamese_response(monkeypatch):
         SimpleNamespace(synthesize=lambda text: None),
     )
     monkeypatch.setattr(
-        "backend.app.services.voice_service.coreiot_service",
-        SimpleNamespace(set_led=lambda on: SimpleNamespace(led_on=on)),
+        "backend.app.services.voice_service.decide_intent",
+        lambda text: LlmDecision(intent="set_led", params={"on": True}, confidence=0.95),
     )
+    monkeypatch.setattr(
+        "backend.app.services.voice_service.coreiot_service",
+        SimpleNamespace(set_led=lambda on, **_: SimpleNamespace(led_on=on)),
+    )
+    monkeypatch.setenv("LLM_ENABLED", "true")
+    monkeypatch.setenv("LLM_INTENT_ENABLED", "true")
+    get_settings.cache_clear()
 
     result = voice_service.execute_text("bat den")
 
@@ -43,11 +56,18 @@ def test_vietnamese_sensor_command_returns_current_values(monkeypatch):
         SimpleNamespace(synthesize=lambda text: None),
     )
     monkeypatch.setattr(
+        "backend.app.services.voice_service.decide_intent",
+        lambda text: LlmDecision(intent="read_sensor", params={}, confidence=0.95),
+    )
+    monkeypatch.setattr(
         "backend.app.services.voice_service.coreiot_service",
         SimpleNamespace(
             get_latest_snapshot=lambda: SimpleNamespace(temperature=32.56, humidity=62.51)
         ),
     )
+    monkeypatch.setenv("LLM_ENABLED", "true")
+    monkeypatch.setenv("LLM_INTENT_ENABLED", "true")
+    get_settings.cache_clear()
 
     result = voice_service.execute_text("đọc nhiệt độ độ ẩm")
 
@@ -60,14 +80,21 @@ def test_coreiot_timeout_returns_assistant_message_instead_of_raising(monkeypatc
         "backend.app.services.voice_service.tts_service",
         SimpleNamespace(synthesize=lambda text: None),
     )
+    monkeypatch.setattr(
+        "backend.app.services.voice_service.decide_intent",
+        lambda text: LlmDecision(intent="set_servo", params={"angle": 90}, confidence=0.95),
+    )
 
-    def fail_servo(_angle):
+    def fail_servo(_angle, **_):
         raise HTTPException(status_code=502, detail="CoreIoT servo command failed: timed out")
 
     monkeypatch.setattr(
         "backend.app.services.voice_service.coreiot_service",
         SimpleNamespace(set_servo=fail_servo),
     )
+    monkeypatch.setenv("LLM_ENABLED", "true")
+    monkeypatch.setenv("LLM_INTENT_ENABLED", "true")
+    get_settings.cache_clear()
 
     result = voice_service.execute_text("servo 90")
 
@@ -83,9 +110,16 @@ def test_status_query_returns_device_status(monkeypatch):
         SimpleNamespace(synthesize=lambda text: None),
     )
     monkeypatch.setattr(
+        "backend.app.services.voice_service.decide_intent",
+        lambda text: LlmDecision(intent="device_status", params={"device": "led"}, confidence=0.95),
+    )
+    monkeypatch.setattr(
         "backend.app.services.voice_service.coreiot_service",
         SimpleNamespace(get_device_status=lambda: SimpleNamespace(led_on=True, servo_angle=45)),
     )
+    monkeypatch.setenv("LLM_ENABLED", "true")
+    monkeypatch.setenv("LLM_INTENT_ENABLED", "true")
+    get_settings.cache_clear()
 
     result = voice_service.execute_text("trang thai den led hien tai")
 
@@ -94,7 +128,7 @@ def test_status_query_returns_device_status(monkeypatch):
     assert "bật" in result.response_text
 
 
-def test_llm_low_confidence_falls_back_to_rule_parser(monkeypatch):
+def test_llm_low_confidence_returns_clarification(monkeypatch):
     monkeypatch.setattr(
         "backend.app.services.voice_service.tts_service",
         SimpleNamespace(synthesize=lambda text: None),
@@ -103,31 +137,26 @@ def test_llm_low_confidence_falls_back_to_rule_parser(monkeypatch):
         "backend.app.services.voice_service.decide_intent",
         lambda text: LlmDecision(intent="set_led", params={"on": True}, confidence=0.1),
     )
-    monkeypatch.setattr(
-        "backend.app.services.voice_service.coreiot_service",
-        SimpleNamespace(set_led=lambda on: SimpleNamespace(led_on=on)),
-    )
+    monkeypatch.setenv("LLM_ENABLED", "true")
+    monkeypatch.setenv("LLM_INTENT_ENABLED", "true")
+    get_settings.cache_clear()
 
     result = voice_service.execute_text("bat den")
 
-    assert result.intent == "set_led"
-    assert result.response_text == "Đèn LED hiện đã bật."
+    assert result.intent == "need_clarification"
+    assert "Bạn muốn tôi làm gì?" in result.response_text
 
 
-def test_llm_repair_attempt_falls_back_when_invalid(monkeypatch):
+def test_llm_unavailable_returns_clarification(monkeypatch):
     monkeypatch.setattr(
         "backend.app.services.voice_service.tts_service",
         SimpleNamespace(synthesize=lambda text: None),
     )
-    monkeypatch.setattr(
-        "backend.app.services.llm_service._request_ollama",
-        lambda payload: "not json",
-    )
-    monkeypatch.setattr(
-        "backend.app.services.llm_service._repair_intent_json",
-        lambda raw, text: None,
-    )
+    monkeypatch.setenv("LLM_ENABLED", "false")
+    monkeypatch.setenv("LLM_INTENT_ENABLED", "false")
+    get_settings.cache_clear()
 
     result = voice_service.execute_text("bat den")
 
-    assert result.intent in {"set_led", "out_of_domain", "unknown"}
+    assert result.intent == "need_clarification"
+    assert "Tôi chưa sẵn sàng xử lý lệnh" in result.response_text

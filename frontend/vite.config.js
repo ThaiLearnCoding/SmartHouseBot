@@ -6,8 +6,11 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     proxy: {
-      "/api": "http://localhost:8000",
-      "/audio": "http://localhost:8000",
+      "/api": {
+        target: "http://127.0.0.1:8000",
+        ws: true,
+      },
+      "/audio": "http://127.0.0.1:8000",
     },
   },
   build: {

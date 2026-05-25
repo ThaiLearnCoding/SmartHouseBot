@@ -28,7 +28,7 @@ export default function VoiceChatPanel({
   return (
     <div className="bmw-card" style={{ border: '1px solid var(--color-hairline)' }}>
       <div className="bmw-card-header">
-        <h2 className="bmw-card-title">Voice Assistant</h2>
+        <h2 className="bmw-card-title">Trợ lý giọng nói</h2>
         <p className="bmw-body-sm" style={{ color: 'var(--color-muted)' }}>
           Nói hoặc nhập lệnh tiếng Việt để điều khiển nhà thông minh.
         </p>

@@ -10,8 +10,11 @@ from fastapi.staticfiles import StaticFiles
 from backend.app.core.config import get_settings
 from backend.app.core.logging import configure_logging
 from backend.app.core.security import apply_security
+from backend.app.db.database import init_db
 from backend.app.middleware.request_context import RequestContextMiddleware
-from backend.app.routers import devices, health, telemetry, voice
+from backend.app.routers import audit, devices, health, telemetry, voice
+from backend.app.services.telemetry_sampler import start_telemetry_sampler, stop_telemetry_sampler
+from backend.app.services.tts_service import tts_service
 from backend.app.services.whisper_service import whisper_service
 
 
@@ -29,6 +32,7 @@ app.include_router(health.router)
 app.include_router(devices.router)
 app.include_router(telemetry.router)
 app.include_router(voice.router)
+app.include_router(audit.router)
 
 
 async def _warmup_pho_whisper() -> None:
@@ -40,14 +44,23 @@ async def _warmup_pho_whisper() -> None:
 
 
 @app.on_event("startup")
-async def warmup_models() -> None:
-    if settings.pho_whisper_warmup and whisper_service.available:
+async def startup() -> None:
+    current_settings = get_settings()
+    init_db(current_settings)
+    start_telemetry_sampler()
+    await asyncio.to_thread(tts_service.cleanup_old_files)
+    if current_settings.pho_whisper_warmup and whisper_service.available:
         asyncio.create_task(_warmup_pho_whisper())
+
+
+@app.on_event("shutdown")
+async def shutdown() -> None:
+    await stop_telemetry_sampler()
 
 
 frontend_dist_dir = settings.frontend_dist_dir
 
-if frontend_dist_dir.exists():
+if settings.serve_frontend and frontend_dist_dir.exists():
     assets_dir = frontend_dist_dir / "assets"
     if assets_dir.exists():
         app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")

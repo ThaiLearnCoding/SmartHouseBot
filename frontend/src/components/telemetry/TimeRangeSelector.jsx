@@ -18,7 +18,7 @@ export default function TimeRangeSelector({ value, onChange }) {
             }}
             onClick={() => onChange(hours)}
           >
-            {hours}h
+            {hours} giờ
           </button>
         );
       })}

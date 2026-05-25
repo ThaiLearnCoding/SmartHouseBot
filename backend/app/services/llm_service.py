@@ -41,6 +41,11 @@ ALLOWED_INTENTS = {
 }
 
 
+def _rewrite_temperature() -> float:
+    settings = get_settings()
+    return min(max(settings.llm_temperature, 0.0), 0.3)
+
+
 def _request_ollama(payload: dict) -> str:
     settings = get_settings()
     response = requests.post(
@@ -159,7 +164,7 @@ def generate_response_text(user_text: str, base_response: str) -> str:
         "prompt": prompt,
         "stream": False,
         "options": {
-            "temperature": 0.1,
+            "temperature": _rewrite_temperature(),
             "top_p": 0.5,
         },
     }
@@ -196,7 +201,7 @@ def stream_response_text(user_text: str, base_response: str) -> Generator[str, N
         "prompt": prompt,
         "stream": True,
         "options": {
-            "temperature": 0.1,
+            "temperature": _rewrite_temperature(),
             "top_p": 0.5,
         },
     }

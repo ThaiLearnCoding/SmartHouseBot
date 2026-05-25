@@ -50,3 +50,7 @@ backend/generated_audio/
 *.ogg
 *.webm
 *.tmp
+
+
+# Logs
+backend/logs/

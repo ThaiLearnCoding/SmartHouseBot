@@ -4,7 +4,7 @@
 
 - a React 19 + Vite frontend in `frontend/`
 - a modular FastAPI backend in `backend/`
-- local speech-to-text with `faster-whisper`
+- local speech-to-text with PhoWhisper via `transformers`
 - local speech synthesis with `piper-tts`
 - CoreIoT RPC and telemetry integration
 
@@ -39,6 +39,8 @@ The app provides a production-oriented baseline for a smart home dashboard that 
 
 ```text
 SmartHouseBot/
+  assets/
+    models/
   backend/
     app/
       clients/
@@ -59,10 +61,7 @@ SmartHouseBot/
   package.json
   requirements.txt
   .env.example
-  web_voice_server.py
 ```
-
-`web_voice_server.py` is kept as a compatibility entrypoint and now re-exports the new FastAPI app.
 
 ## API Endpoints
 
@@ -99,7 +98,7 @@ Required values:
 - `COREIOT_EMAIL`
 - `COREIOT_PASSWORD`
 - `COREIOT_DEVICE_ID`
-- `PIPER_MODEL`
+- `PIPER_MODEL` (default location: `assets/models/vi_VN-vais1000-medium.onnx`)
 
 Common optional values:
 
@@ -108,6 +107,12 @@ Common optional values:
 - `WHISPER_MODEL_SIZE`
 - `WHISPER_DEVICE`
 - `WHISPER_LANGUAGE`
+- `PHO_WHISPER_MODEL`
+- `PHO_WHISPER_DEVICE`
+- `PHO_WHISPER_WARMUP`
+- `HF_HOME`
+- `HF_HUB_OFFLINE`
+- `HF_TOKEN`
 - `LLM_ENABLED`
 - `OLLAMA_URL`
 - `OLLAMA_MODEL`
@@ -123,6 +128,20 @@ Create or activate your virtual environment, then install backend requirements:
 
 ```bash
 pip install -r requirements.txt
+```
+
+### 1.1 Install ffmpeg (required for audio upload)
+
+Windows (winget):
+
+```powershell
+./scripts/install_ffmpeg.ps1
+```
+
+Verify:
+
+```powershell
+ffmpeg -version
 ```
 
 ### 2. Root tooling
@@ -160,12 +179,6 @@ This starts:
 
 ```bash
 python3 -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload
-```
-
-Compatibility entrypoint:
-
-```bash
-python3 -m uvicorn web_voice_server:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 ### 6. Run frontend only

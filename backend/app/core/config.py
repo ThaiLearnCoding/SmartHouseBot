@@ -39,6 +39,14 @@ class Settings(BaseSettings):
     whisper_compute_type: str = Field(default="int8", alias="WHISPER_COMPUTE_TYPE")
     whisper_language: str = Field(default="vi", alias="WHISPER_LANGUAGE")
 
+    pho_whisper_model: str = Field(default="", alias="PHO_WHISPER_MODEL")
+    pho_whisper_device: str = Field(default="auto", alias="PHO_WHISPER_DEVICE")
+    pho_whisper_dtype: str = Field(default="float16", alias="PHO_WHISPER_DTYPE")
+    pho_whisper_warmup: bool = Field(default=True, alias="PHO_WHISPER_WARMUP")
+    hf_token: str = Field(default="", alias="HF_TOKEN")
+    hf_home: str = Field(default="", alias="HF_HOME")
+    hf_hub_offline: bool = Field(default=False, alias="HF_HUB_OFFLINE")
+
     piper_model: str = Field(default="", alias="PIPER_MODEL")
 
     llm_enabled: bool = Field(default=False, alias="LLM_ENABLED")
@@ -66,6 +74,17 @@ class Settings(BaseSettings):
 
     def get_telemetry_keys(self) -> List[str]:
         return [key.strip() for key in self.telemetry_device_keys.split(",") if key.strip()]
+
+    def get_pho_whisper_model_id(self) -> str:
+        if self.pho_whisper_model.strip():
+            return self.pho_whisper_model.strip()
+
+        size = self.whisper_model_size.strip().lower()
+        size_map = {"tiny", "base", "small", "medium", "large"}
+        if size in size_map:
+            return f"vinai/PhoWhisper-{size}"
+
+        return "vinai/PhoWhisper-small"
 
     @property
     def frontend_dist_dir(self) -> Path:

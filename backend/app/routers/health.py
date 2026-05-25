@@ -15,6 +15,8 @@ def health_check():
         "status": "ok",
         "environment": settings.environment,
         "whisper_available": whisper_service.available,
+        "whisper_warmup_state": whisper_service.warmup_state,
+        "whisper_warmup_error": whisper_service.warmup_error,
         "piper_model_configured": bool(settings.piper_model),
         "tts_available": tts_service.available,
         "llm_enabled": settings.llm_enabled,

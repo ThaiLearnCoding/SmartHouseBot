@@ -1,5 +1,4 @@
 fastapi
-faster-whisper
 piper-tts
 pydantic-settings
 python-dotenv
@@ -7,3 +6,7 @@ python-multipart
 requests
 uvicorn[standard]
 pytest
+sentencepiece
+torch
+torchaudio
+transformers

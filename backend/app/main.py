@@ -1,5 +1,8 @@
 from pathlib import Path
 
+import asyncio
+import logging
+
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -9,9 +12,12 @@ from backend.app.core.logging import configure_logging
 from backend.app.core.security import apply_security
 from backend.app.middleware.request_context import RequestContextMiddleware
 from backend.app.routers import devices, health, telemetry, voice
+from backend.app.services.whisper_service import whisper_service
 
 
 configure_logging()
+
+logger = logging.getLogger(__name__)
 
 settings = get_settings()
 app = FastAPI(title=settings.app_name, debug=settings.debug)
@@ -23,6 +29,20 @@ app.include_router(health.router)
 app.include_router(devices.router)
 app.include_router(telemetry.router)
 app.include_router(voice.router)
+
+
+async def _warmup_pho_whisper() -> None:
+    try:
+        await asyncio.to_thread(whisper_service.warmup)
+        logger.info("PhoWhisper model warmup completed")
+    except Exception:
+        logger.exception("PhoWhisper warmup failed")
+
+
+@app.on_event("startup")
+async def warmup_models() -> None:
+    if settings.pho_whisper_warmup and whisper_service.available:
+        asyncio.create_task(_warmup_pho_whisper())
 
 
 frontend_dist_dir = settings.frontend_dist_dir

@@ -2,6 +2,7 @@ from types import SimpleNamespace
 
 from fastapi import HTTPException
 
+from backend.app.schemas.llm import LlmDecision
 from backend.app.services.voice_service import VALID_COMMAND_HINT, voice_service
 
 
@@ -74,3 +75,59 @@ def test_coreiot_timeout_returns_assistant_message_instead_of_raising(monkeypatc
     assert "Tôi đã hiểu lệnh của bạn" in result.response_text
     assert "CoreIOT" in result.response_text
     assert "timed out" in result.response_text
+
+
+def test_status_query_returns_device_status(monkeypatch):
+    monkeypatch.setattr(
+        "backend.app.services.voice_service.tts_service",
+        SimpleNamespace(synthesize=lambda text: None),
+    )
+    monkeypatch.setattr(
+        "backend.app.services.voice_service.coreiot_service",
+        SimpleNamespace(get_device_status=lambda: SimpleNamespace(led_on=True, servo_angle=45)),
+    )
+
+    result = voice_service.execute_text("trang thai den led hien tai")
+
+    assert result.intent == "device_status"
+    assert "Đèn LED" in result.response_text
+    assert "bật" in result.response_text
+
+
+def test_llm_low_confidence_falls_back_to_rule_parser(monkeypatch):
+    monkeypatch.setattr(
+        "backend.app.services.voice_service.tts_service",
+        SimpleNamespace(synthesize=lambda text: None),
+    )
+    monkeypatch.setattr(
+        "backend.app.services.voice_service.decide_intent",
+        lambda text: LlmDecision(intent="set_led", params={"on": True}, confidence=0.1),
+    )
+    monkeypatch.setattr(
+        "backend.app.services.voice_service.coreiot_service",
+        SimpleNamespace(set_led=lambda on: SimpleNamespace(led_on=on)),
+    )
+
+    result = voice_service.execute_text("bat den")
+
+    assert result.intent == "set_led"
+    assert result.response_text == "Đèn LED hiện đã bật."
+
+
+def test_llm_repair_attempt_falls_back_when_invalid(monkeypatch):
+    monkeypatch.setattr(
+        "backend.app.services.voice_service.tts_service",
+        SimpleNamespace(synthesize=lambda text: None),
+    )
+    monkeypatch.setattr(
+        "backend.app.services.llm_service._request_ollama",
+        lambda payload: "not json",
+    )
+    monkeypatch.setattr(
+        "backend.app.services.llm_service._repair_intent_json",
+        lambda raw, text: None,
+    )
+
+    result = voice_service.execute_text("bat den")
+
+    assert result.intent in {"set_led", "out_of_domain", "unknown"}

@@ -62,6 +62,8 @@ class Settings(BaseSettings):
     llm_timeout_seconds: float = Field(default=15.0, alias="LLM_TIMEOUT_SECONDS")
     llm_intent_enabled: bool = Field(default=True, alias="LLM_INTENT_ENABLED")
     llm_confidence_threshold: float = Field(default=0.6, alias="LLM_CONFIDENCE_THRESHOLD")
+    audit_log_enabled: bool = Field(default=True, alias="AUDIT_LOG_ENABLED")
+    audit_log_path: str = Field(default="backend/logs/audit.jsonl", alias="AUDIT_LOG_PATH")
 
     voice_rate_limit_count: int = Field(default=10, alias="VOICE_RATE_LIMIT_COUNT")
     voice_rate_limit_window_seconds: int = Field(default=60, alias="VOICE_RATE_LIMIT_WINDOW_SECONDS")

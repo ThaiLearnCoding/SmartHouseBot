@@ -92,6 +92,11 @@ def _build_intent_prompt(user_text: str) -> str:
         "device_status -> {\"device\": \"led\"|\"servo\"|\"all\"} (tuỳ chọn, mặc định all). "
         "Nếu thiếu thông tin cho servo, dùng intent=need_clarification và params chứa {\"question\": ...}. "
         "confidence là số từ 0 đến 1.\n\n"
+        "Ví dụ:\n"
+        "- Câu lệnh: 'nhiệt độ hiện tại là bao nhiêu' -> {\"intent\": \"read_sensor\", \"params\": {}, \"confidence\": 0.9}\n"
+        "- Câu lệnh: 'trời nóng quá, nhiệt độ bao nhiêu vậy' -> {\"intent\": \"read_sensor\", \"params\": {}, \"confidence\": 0.9}\n"
+        "- Câu lệnh: 'độ ẩm hiện tại bao nhiêu' -> {\"intent\": \"read_sensor\", \"params\": {}, \"confidence\": 0.9}\n"
+        "- Câu lệnh: 'trạng thái đèn LED' -> {\"intent\": \"device_status\", \"params\": {\"device\": \"led\"}, \"confidence\": 0.9}\n\n"
         f"Câu lệnh: {user_text}\n"
         "JSON:"
     )

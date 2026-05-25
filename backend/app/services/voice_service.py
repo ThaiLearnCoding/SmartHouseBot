@@ -80,6 +80,18 @@ def build_house_advice(temp_value, humidity_value) -> str:
 
 
 class VoiceService:
+    def _looks_like_sensor_query(self, user_text: str) -> bool:
+        normalized = user_text.lower()
+        return any(key in normalized for key in [
+            "nhiet do",
+            "do am",
+            "temperature",
+            "humidity",
+            "bao nhieu do",
+            "nong",
+            "lanh",
+            "thoi tiet",
+        ])
     def _looks_like_status_query(self, user_text: str) -> bool:
         normalized = user_text.lower()
         return any(key in normalized for key in [
@@ -98,6 +110,8 @@ class VoiceService:
             if decision and decision.confidence >= settings.llm_confidence_threshold:
                 intent = decision.intent
                 params = decision.params or {}
+                if self._looks_like_sensor_query(user_text) and intent in {"out_of_domain", "chitchat", "need_clarification"}:
+                    return "read_sensor", {}, "rule_override"
                 if intent in {"set_led", "set_servo"} and self._looks_like_status_query(user_text):
                     return "device_status", {"device": "all"}, "llm_override"
                 if intent == "set_led" and isinstance(params.get("on"), bool):

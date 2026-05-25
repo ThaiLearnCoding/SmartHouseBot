@@ -54,6 +54,12 @@ def parse_intent(user_text: str) -> Tuple[str, Dict]:
         "read sensor",
         "nhiet do hien tai",
         "do am hien tai",
+        "bao nhieu do",
+        "bao nhieu do c",
+        "bao nhieu do c",
+        "nong",
+        "lanh",
+        "thoi tiet",
     ]):
         if any(k in normalized for k in ["hom nay", "today", "tinh trang", "condition", "house status", "nha"]):
             return "house_summary", {}
@@ -65,7 +71,7 @@ def parse_intent(user_text: str) -> Tuple[str, Dict]:
         "bao nhieu the",
         "bao nhieu a",
         "bao nhieu ha",
-    ]) and any(k in normalized for k in ["nhiet do", "do am"]):
+    ]) and any(k in normalized for k in ["nhiet do", "do am", "nong", "lanh"]):
         return "read_sensor", {}
 
     if any(k in normalized for k in ["tinh trang nha", "condition of the house", "house today", "nha hom nay"]):

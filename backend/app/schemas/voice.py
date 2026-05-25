@@ -16,7 +16,3 @@ class AssistantResult(BaseModel):
 
 class TranscriptionResult(BaseModel):
     transcript: str
-
-
-class TranscriptionResult(BaseModel):
-    transcript: str

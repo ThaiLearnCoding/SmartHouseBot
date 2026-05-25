@@ -27,6 +27,16 @@ def parse_intent(user_text: str) -> Tuple[str, Dict]:
     if any(k in normalized for k in ["tat den", "dong den", "led off", "turn off led", "tat led"]):
         return "set_led", {"on": False}
 
+    if any(k in normalized for k in [
+        "trang thai",
+        "hien tai",
+        "dang the nao",
+        "dang ra sao",
+        "bat hay tat",
+        "co dang",
+    ]) and any(k in normalized for k in ["den", "led", "servo", "goc servo", "quat", "fan"]):
+        return "device_status", {}
+
     if "servo" in normalized or "goc" in normalized or "quay" in normalized:
         match = re.search(r"(\d{1,3})", normalized)
         if not match:
@@ -35,9 +45,27 @@ def parse_intent(user_text: str) -> Tuple[str, Dict]:
             }
         return "set_servo", {"angle": max(0, min(180, int(match.group(1))))}
 
-    if any(k in normalized for k in ["nhiet do", "do am", "temperature", "humidity", "cam bien", "read sensor"]):
+    if any(k in normalized for k in [
+        "nhiet do",
+        "do am",
+        "temperature",
+        "humidity",
+        "cam bien",
+        "read sensor",
+        "nhiet do hien tai",
+        "do am hien tai",
+    ]):
         if any(k in normalized for k in ["hom nay", "today", "tinh trang", "condition", "house status", "nha"]):
             return "house_summary", {}
+        return "read_sensor", {}
+
+    if any(k in normalized for k in [
+        "bao nhieu",
+        "bao nhieu vay",
+        "bao nhieu the",
+        "bao nhieu a",
+        "bao nhieu ha",
+    ]) and any(k in normalized for k in ["nhiet do", "do am"]):
         return "read_sensor", {}
 
     if any(k in normalized for k in ["tinh trang nha", "condition of the house", "house today", "nha hom nay"]):

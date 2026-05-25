@@ -60,6 +60,8 @@ class Settings(BaseSettings):
     ollama_model: str = Field(default="qwen2.5:3b-instruct", alias="OLLAMA_MODEL")
     llm_temperature: float = Field(default=0.8, alias="LLM_TEMPERATURE")
     llm_timeout_seconds: float = Field(default=15.0, alias="LLM_TIMEOUT_SECONDS")
+    llm_intent_enabled: bool = Field(default=True, alias="LLM_INTENT_ENABLED")
+    llm_confidence_threshold: float = Field(default=0.6, alias="LLM_CONFIDENCE_THRESHOLD")
 
     voice_rate_limit_count: int = Field(default=10, alias="VOICE_RATE_LIMIT_COUNT")
     voice_rate_limit_window_seconds: int = Field(default=60, alias="VOICE_RATE_LIMIT_WINDOW_SECONDS")

@@ -12,6 +12,7 @@ from backend.app.core.config import get_settings
 from backend.app.schemas.voice import AssistantResult
 from backend.app.services.coreiot_service import coreiot_service
 from backend.app.services.intent_service import parse_intent
+from backend.app.services.llm_service import decide_intent
 from backend.app.services.tts_service import tts_service
 from backend.app.services.whisper_service import whisper_service
 
@@ -187,8 +188,48 @@ def stream_natural_response(
 
 
 class VoiceService:
+    def _looks_like_status_query(self, user_text: str) -> bool:
+        normalized = user_text.lower()
+        return any(key in normalized for key in [
+            "trang thai",
+            "hien tai",
+            "dang the nao",
+            "dang ra sao",
+            "bat hay tat",
+            "bao nhieu",
+        ])
+
+    def _resolve_intent(self, user_text: str) -> tuple[str, dict]:
+        settings = get_settings()
+        if settings.llm_enabled and settings.llm_intent_enabled and settings.llm_backend.strip().lower() == "ollama":
+            decision = decide_intent(user_text)
+            if decision and decision.confidence >= settings.llm_confidence_threshold:
+                intent = decision.intent
+                params = decision.params or {}
+                if intent in {"set_led", "set_servo"} and self._looks_like_status_query(user_text):
+                    return "device_status", {"device": "all"}
+                if intent == "set_led" and isinstance(params.get("on"), bool):
+                    return intent, params
+                if intent == "set_servo":
+                    angle = params.get("angle")
+                    if isinstance(angle, (int, float)):
+                        params["angle"] = max(0, min(180, int(angle)))
+                        return intent, params
+                    return "need_clarification", {
+                        "question": "Bạn muốn xoay servo tới góc bao nhiêu? Hãy nói một góc từ 0 đến 180, ví dụ: 'servo 90 độ'."
+                    }
+                if intent == "device_status":
+                    device = params.get("device")
+                    if device not in {"led", "servo", "all"}:
+                        params["device"] = "all"
+                    return intent, params
+                if intent in {"read_sensor", "house_summary", "out_of_domain", "chitchat", "need_clarification"}:
+                    return intent, params
+
+        return parse_intent(user_text)
+
     def _build_response_text(self, user_text: str) -> tuple[str, str]:
-        intent, payload = parse_intent(user_text)
+        intent, payload = self._resolve_intent(user_text)
 
         if intent == "empty":
             return (
@@ -201,6 +242,30 @@ class VoiceService:
                 intent,
                 f"Tôi chỉ hỗ trợ các lệnh nhà thông minh như đọc nhiệt độ, độ ẩm, bật tắt LED hoặc điều khiển servo. {VALID_COMMAND_HINT}",
             )
+
+        if intent == "chitchat":
+            return intent, "Tôi sẵn sàng hỗ trợ các lệnh nhà thông minh. Bạn muốn làm gì tiếp?"
+
+        if intent == "device_status":
+            try:
+                status = coreiot_service.get_device_status()
+            except HTTPException as exc:
+                return intent, self._coreiot_failure_result(user_text, intent, exc).response_text
+
+            device = (payload or {}).get("device", "all")
+            parts = []
+            if device in {"led", "all"}:
+                if status.led_on is None:
+                    parts.append("Tôi chưa đọc được trạng thái đèn LED")
+                else:
+                    parts.append(f"Đèn LED hiện đang {'bật' if status.led_on else 'tắt'}")
+            if device in {"servo", "all"}:
+                if status.servo_angle is None:
+                    parts.append("Tôi chưa đọc được góc servo hiện tại")
+                else:
+                    parts.append(f"Servo hiện ở góc {status.servo_angle} độ")
+
+            return intent, ". ".join(parts) + "."
 
         if intent == "need_clarification":
             return intent, payload["question"]

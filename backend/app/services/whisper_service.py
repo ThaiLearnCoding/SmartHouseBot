@@ -10,6 +10,18 @@ from backend.app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
 
+_settings = get_settings()
+if _settings.hf_hub_offline and not os.environ.get("HF_HUB_OFFLINE"):
+    os.environ["HF_HUB_OFFLINE"] = "1"
+if _settings.transformers_offline and not os.environ.get("TRANSFORMERS_OFFLINE"):
+    os.environ["TRANSFORMERS_OFFLINE"] = "1"
+if _settings.hf_disable_safetensors_conversion and not os.environ.get("HF_HUB_DISABLE_SAFETENSORS_CONVERSION"):
+    os.environ["HF_HUB_DISABLE_SAFETENSORS_CONVERSION"] = "1"
+if _settings.hf_home.strip() and not os.environ.get("HF_HOME"):
+    os.environ["HF_HOME"] = _settings.hf_home.strip()
+if _settings.hf_token.strip() and not os.environ.get("HF_TOKEN"):
+    os.environ["HF_TOKEN"] = _settings.hf_token.strip()
+
 try:
     import torch
     from transformers import pipeline
@@ -45,19 +57,6 @@ class WhisperService:
             raise HTTPException(status_code=500, detail=f"PhoWhisper is unavailable: {IMPORT_ERROR}")
 
         if self._pipeline is None:
-            if self.settings.hf_hub_offline and not os.environ.get("HF_HUB_OFFLINE"):
-                os.environ["HF_HUB_OFFLINE"] = "1"
-            if self.settings.transformers_offline and not os.environ.get("TRANSFORMERS_OFFLINE"):
-                os.environ["TRANSFORMERS_OFFLINE"] = "1"
-            if (
-                self.settings.hf_disable_safetensors_conversion
-                and not os.environ.get("HF_HUB_DISABLE_SAFETENSORS_CONVERSION")
-            ):
-                os.environ["HF_HUB_DISABLE_SAFETENSORS_CONVERSION"] = "1"
-            if self.settings.hf_home.strip() and not os.environ.get("HF_HOME"):
-                os.environ["HF_HOME"] = self.settings.hf_home.strip()
-            if self.settings.hf_token.strip() and not os.environ.get("HF_TOKEN"):
-                os.environ["HF_TOKEN"] = self.settings.hf_token.strip()
             model_id = self.settings.get_pho_whisper_model_id()
             device_setting = self.settings.pho_whisper_device.strip().lower()
             use_cuda = device_setting in {"cuda", "gpu", "auto"} and torch.cuda.is_available()

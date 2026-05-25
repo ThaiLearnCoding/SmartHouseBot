@@ -1,8 +1,9 @@
-requests
 fastapi
-uvicorn
-python-multipart
 faster-whisper
+piper-tts
+pydantic-settings
 python-dotenv
-vosk
-sounddevice
+python-multipart
+requests
+uvicorn[standard]
+pytest

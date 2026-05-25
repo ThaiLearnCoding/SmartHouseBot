@@ -1,237 +1,200 @@
-# Smart Home Voice Assistant (Local AI + CoreIoT)
+# Smart Home Dashboard
 
-## 1. Project Overview
+`SmartHouseBot` is now structured as a full-stack smart home dashboard with:
 
-This project builds a **smart home voice assistant** that allows users to control IoT devices and check home environment conditions using natural language voice commands.
+- a React 19 + Vite frontend in `frontend/`
+- a modular FastAPI backend in `backend/`
+- local speech-to-text with `faster-whisper`
+- local speech synthesis with `piper-tts`
+- CoreIoT RPC and telemetry integration
 
-The system is designed with a **privacy-first local AI approach**:
+The app provides a production-oriented baseline for a smart home dashboard that supports live telemetry, device controls, and a browser-based voice assistant.
 
-- Voice is captured from a web interface.
-- Speech-to-text is processed locally using Faster-Whisper.
-- Command understanding and routing happen in the local backend.
-- Device control is sent to CoreIoT through secure backend API calls.
-- Voice responses are generated locally using Piper TTS.
+## Architecture
 
-This architecture reduces cloud dependency for AI processing while still using CoreIoT as the IoT control platform.
+### Frontend
 
----
+- React 19 via Vite
+- TailwindCSS + daisyUI
+- Zustand for dashboard and voice assistant state
+- Axios for API access
+- Recharts for telemetry visualization
 
-## 2. Problem Statement
+### Backend
 
-Traditional smart home systems usually require users to interact through buttons, sliders, or dashboards. This can be less natural than spoken interaction.
+- FastAPI application in `backend/app`
+- Routers split by feature area:
+  - `backend/app/routers/health.py`
+  - `backend/app/routers/devices.py`
+  - `backend/app/routers/telemetry.py`
+  - `backend/app/routers/voice.py`
+- Service layer for:
+  - CoreIoT access
+  - voice orchestration
+  - Whisper transcription
+  - Piper TTS synthesis
+  - intent parsing
 
-This project addresses that by enabling users to:
+## Folder Layout
 
-1. Speak commands naturally.
-2. Control smart home devices through voice.
-3. Ask for current home status (temperature/humidity).
-4. Receive spoken responses and simple recommendations.
-
-Example:
-
-> User: "Tell me the condition of the house today"
->
-> Assistant: "It is 38 degrees Celsius with 32 percent humidity now. It feels hot. Drink more water, wear cool clothes, and avoid going outside unless needed."
-
----
-
-## 3. System Architecture
-
-### 3.1 IoT Layer
-
-- ESP32-based device connected to CoreIoT
-- Sensors: temperature and humidity
-- Actuators: LED, servo (and optional fan)
-
-### 3.2 Cloud / Platform Layer
-
-- CoreIoT handles telemetry storage and RPC device control
-- Dashboard configuration is available in `esp32.json`
-
-### 3.3 Local AI Web Layer
-
-- Web frontend captures microphone input
-- Backend transcribes voice and maps to intents
-- Backend executes CoreIoT actions and generates responses
-- Piper TTS returns audio response to browser
-
----
-
-## 4. Main Features
-
-1. Voice command from browser
-2. Local speech-to-text with Faster-Whisper
-3. Smart home command parsing (LED, servo, sensor read)
-4. Out-of-domain fallback (for unrelated questions)
-5. House condition summary with practical advice
-6. Optional local SLM response rewriting for natural and varied responses (Ollama)
-7. Local text-to-speech response with Piper
-8. Text fallback mode when microphone is unavailable
-
----
-
-## 5. Project Structure
-
-- `coreiot_rpc_controller.py`: CoreIoT login, RPC send, telemetry read
-- `local_voice_assistant.py`: local terminal assistant (voice/text)
-- `web_voice_server.py`: FastAPI backend for web voice pipeline
-- `static/index.html`: web interface (mic + text + response audio)
-- `esp32.json`: CoreIoT dashboard configuration
-- `.env.example`: environment configuration template
-- `requirements.txt`: Python dependencies
-- `scripts/load_env.ps1`: load environment variables from `.env`
-- `scripts/start_web.ps1`: start local web server quickly
-
----
-
-## 6. Voice Pipeline
-
-1. User presses record on website
-2. Browser sends audio to backend
-3. Faster-Whisper transcribes audio to text
-4. Intent router classifies request:
-   - In-domain action (control device)
-   - In-domain information (read/summarize environment)
-   - Out-of-domain (unexpected command)
-5. Backend calls CoreIoT API when needed
-6. Backend builds response text
-7. Piper generates voice output
-8. Website plays response audio
-
----
-
-## 7. Out-of-Domain Handling
-
-The system safely handles unexpected requests that are unrelated to smart-home control.
-
-Example:
-
-- User: "Where is my phone?"
-- Assistant behavior:
-  - Does not send any CoreIoT command
-  - Returns fallback message explaining supported features
-
-This prevents wrong actions and improves robustness.
-
----
-
-## 8. Setup and Run
-
-### 8.1 Install dependencies
-
-```powershell
-pip install -r requirements.txt
+```text
+SmartHouseBot/
+  backend/
+    app/
+      clients/
+      controllers/
+      core/
+      middleware/
+      routers/
+      schemas/
+      services/
+      main.py
+  frontend/
+    src/
+      components/
+      lib/
+      pages/
+      services/
+      store/
+  package.json
+  requirements.txt
+  .env.example
+  web_voice_server.py
 ```
 
-### 8.2 Prepare environment file
+`web_voice_server.py` is kept as a compatibility entrypoint and now re-exports the new FastAPI app.
 
-```powershell
-copy .env.example .env
+## API Endpoints
+
+### Health
+
+- `GET /api/health`
+
+### Devices
+
+- `GET /api/devices/status`
+- `POST /api/devices/led`
+- `POST /api/devices/servo`
+
+### Telemetry
+
+- `GET /api/telemetry/latest`
+- `GET /api/telemetry/history?range_hours=24`
+
+### Voice
+
+- `POST /api/voice/text-turn`
+- `POST /api/voice/audio-turn`
+
+## Environment Variables
+
+Copy `.env.example` to `.env` and fill in at least:
+
+```bash
+cp .env.example .env
 ```
 
-Fill values in `.env`:
+Required values:
 
 - `COREIOT_EMAIL`
 - `COREIOT_PASSWORD`
 - `COREIOT_DEVICE_ID`
-- `PIPER_PATH`
 - `PIPER_MODEL`
-- Whisper settings (optional)
-- Optional LLM settings (`LLM_ENABLED`, `OLLAMA_MODEL`, ...)
 
-### 8.3 Run web server
+Common optional values:
 
-```powershell
-uvicorn web_voice_server:app --host 0.0.0.0 --port 8000 --reload
+- `CLIENT_URL`
+- `CORS_ORIGINS`
+- `WHISPER_MODEL_SIZE`
+- `WHISPER_DEVICE`
+- `WHISPER_LANGUAGE`
+- `LLM_ENABLED`
+- `OLLAMA_URL`
+- `OLLAMA_MODEL`
+- `VOICE_RATE_LIMIT_COUNT`
+- `DEVICE_RATE_LIMIT_COUNT`
+- `TELEMETRY_LIMIT_POINTS`
+
+## Local Development
+
+### 1. Python dependencies
+
+Create or activate your virtual environment, then install backend requirements:
+
+```bash
+pip install -r requirements.txt
 ```
 
-Open browser at:
+### 2. Root tooling
 
-- `http://localhost:8000`
+Install the root development dependency for concurrent running:
 
----
-
-## 9. Sample Commands
-
-- "bat den"
-- "tat den"
-- "quay servo 90 do"
-- "doc nhiet do va do am"
-- "tell me the condition of the house today"
-
----
-
-## 10. What Must Be Installed Manually
-
-Some parts cannot be auto-installed by this project code:
-
-1. **FFmpeg** (required by Faster-Whisper audio processing)
-2. **Piper executable**
-3. **Piper voice model (.onnx)**
-4. Browser microphone permission
-5. HTTPS if testing microphone on non-localhost domains/devices
-6. **Ollama + one local model** (only if you enable `LLM_ENABLED=true`)
-
-### Optional: Enable local SLM for natural diverse outputs
-
-1. Install Ollama locally.
-2. Pull a small model, for example:
-
-```powershell
-ollama pull qwen2.5:3b-instruct
+```bash
+npm install
 ```
 
-1. Update `.env`:
+### 3. Frontend dependencies
 
-```text
-LLM_ENABLED=true
-LLM_BACKEND=ollama
-OLLAMA_URL=http://127.0.0.1:11434
-OLLAMA_MODEL=qwen2.5:3b-instruct
-LLM_TEMPERATURE=0.8
+Install the React app dependencies:
+
+```bash
+cd frontend
+npm install
+cd ..
 ```
 
-1. Restart the web server.
+### 4. Run both apps together
 
-With this mode enabled, device intent routing remains rule-based for safety, while final spoken responses become more natural and varied.
+From the project root:
 
----
+```bash
+npm run dev
+```
 
-## 11. Security and Privacy Notes
+This starts:
 
-- CoreIoT credentials stay on backend only
-- Frontend never stores or sends CoreIoT password directly
-- Speech processing is local when Faster-Whisper and Piper are local
-- You can disable audio retention/logging for stronger privacy
+- FastAPI on `http://localhost:8000`
+- Vite on `http://localhost:5173`
 
----
+### 5. Run backend only
 
-## 12. Current Status and Next Improvements
+```bash
+python3 -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload
+```
 
-### Completed
+Compatibility entrypoint:
 
-- CoreIoT device control integration
-- Local web voice interface
-- Local STT + local TTS pipeline
-- Out-of-domain fallback handling
+```bash
+python3 -m uvicorn web_voice_server:app --host 0.0.0.0 --port 8000 --reload
+```
 
-### Suggested Next Steps
+### 6. Run frontend only
 
-1. Add confidence scoring and clarification questions
-2. Improve Vietnamese NLU patterns and synonyms
-3. Add command logs and latency metrics for evaluation report
-4. Add authentication for multi-user web access
-5. Package with Docker for easier deployment
+```bash
+cd frontend
+npm run dev
+```
 
----
+## Production Build
 
-## 13. Academic Contribution
+Build the frontend bundle:
 
-This project demonstrates practical integration of:
+```bash
+npm run build
+```
 
-- IoT systems (sensing + actuation)
-- Cloud IoT platform orchestration (CoreIoT)
-- Local AI speech pipeline (STT + NLU + TTS)
-- Human-friendly voice interaction for smart home management
+The Vite output is generated in `frontend/dist`. The FastAPI app automatically serves that built SPA when the directory exists.
 
-It provides a reusable foundation for future work on personalized smart home assistants with stronger privacy guarantees.
+## Production Serving
+
+### Uvicorn
+
+```bash
+python3 -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8000
+```
+
+### Gunicorn + Uvicorn workers
+
+```bash
+gunicorn backend.app.main:app -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
+```

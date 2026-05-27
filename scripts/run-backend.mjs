@@ -73,7 +73,7 @@ const args = [
 const child = spawn(command, args, {
   cwd: rootDir,
   stdio: "inherit",
-  shell: process.platform === "win32",
+  shell: false,
   env: {
     ...process.env,
     DISABLE_SAFETENSORS_CONVERSION: "1",

@@ -1,6 +1,9 @@
+from typing import Optional
+
 from fastapi import APIRouter, Query
 
 from backend.app.controllers.telemetry_controller import get_history, get_latest_telemetry
+from backend.app.core.config import get_settings
 from backend.app.schemas.telemetry import TelemetryHistoryResponse, TelemetryLatestResponse
 
 
@@ -13,5 +16,9 @@ def read_latest():
 
 
 @router.get("/history", response_model=TelemetryHistoryResponse)
-def read_history(range_hours: int = Query(default=24, ge=1, le=72)):
-    return get_history(range_hours)
+def read_history(
+    range_hours: Optional[int] = Query(default=None, ge=1, le=72),
+):
+    settings = get_settings()
+    hours = range_hours if range_hours is not None else settings.telemetry_default_hours
+    return get_history(hours)

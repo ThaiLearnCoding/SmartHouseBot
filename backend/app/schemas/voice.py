@@ -12,3 +12,7 @@ class AssistantResult(BaseModel):
     intent: str
     response_text: str
     audio_url: Optional[str] = None
+
+
+class TranscriptionResult(BaseModel):
+    transcript: str

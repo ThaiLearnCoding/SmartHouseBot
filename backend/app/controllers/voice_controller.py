@@ -8,3 +8,7 @@ def process_text_turn(text: str) -> AssistantResult:
 
 def process_audio_turn(suffix: str, content: bytes) -> AssistantResult:
     return voice_service.execute_audio(suffix=suffix, content=content)
+
+
+def process_audio_transcribe(suffix: str, content: bytes) -> str:
+    return voice_service.transcribe_audio(suffix=suffix, content=content)

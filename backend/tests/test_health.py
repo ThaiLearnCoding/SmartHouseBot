@@ -2,7 +2,10 @@ from types import SimpleNamespace
 
 
 def test_health_reports_dependency_status(client, monkeypatch):
-    monkeypatch.setattr("backend.app.routers.health.whisper_service", SimpleNamespace(available=True))
+    monkeypatch.setattr(
+        "backend.app.routers.health.whisper_service",
+        SimpleNamespace(available=True, warmup_state="ready", warmup_error=None),
+    )
     monkeypatch.setattr("backend.app.routers.health.tts_service", SimpleNamespace(available=False))
 
     response = client.get("/api/health")

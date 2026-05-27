@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { getApiErrorMessage } from "../lib/axios";
-import { sendAudioTurn, sendTextTurn } from "../services/voiceApi";
+import { transcribeAudio } from "../services/voiceApi";
 
 function buildMessage(role, text, extra = {}) {
   return {
@@ -12,13 +12,15 @@ function buildMessage(role, text, extra = {}) {
 }
 
 let voiceErrorTimeout = null;
+let voiceSocket = null;
+let connectPromise = null;
 
 export const useVoiceAssistantStore = create((set, get) => ({
   messages: [],
   isRecording: false,
   isProcessing: false,
   currentTranscript: "",
-  activeAudioUrl: null,
+  audioChunks: [],
   error: null,
 
   setError: (errorMsg) => {
@@ -33,6 +35,72 @@ export const useVoiceAssistantStore = create((set, get) => ({
 
   setRecording: (isRecording) => set({ isRecording }),
 
+  ensureSocket: () => {
+    if (voiceSocket && voiceSocket.readyState === WebSocket.OPEN) {
+      return Promise.resolve();
+    }
+    if (connectPromise) return connectPromise;
+
+    connectPromise = new Promise((resolve, reject) => {
+      const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+      const wsUrl = `${protocol}://${window.location.host}/api/voice/stream`;
+      voiceSocket = new WebSocket(wsUrl);
+
+      voiceSocket.onopen = () => {
+        connectPromise = null;
+        resolve();
+      };
+
+      voiceSocket.onerror = () => {
+        connectPromise = null;
+        reject(new Error("WebSocket connection failed"));
+      };
+
+      voiceSocket.onmessage = (event) => {
+        const payload = JSON.parse(event.data);
+        const { type } = payload;
+        if (type === "assistant_token") {
+          set((state) => {
+            const messages = state.messages.map((message) => {
+              if (message.role !== "assistant" || !message.isStreaming) return message;
+              return { ...message, text: `${message.text}${payload.token}` };
+            });
+            return { messages };
+          });
+        }
+
+        if (type === "assistant_done") {
+          set((state) => {
+            const messages = state.messages.map((message) => {
+              if (message.role !== "assistant" || !message.isStreaming) return message;
+              return {
+                ...message,
+                isStreaming: false,
+                intent: payload.intent,
+              };
+            });
+            return { messages, isProcessing: false };
+          });
+        }
+
+        if (type === "audio_chunk") {
+          set((state) => ({ audioChunks: [...state.audioChunks, payload.data] }));
+        }
+      };
+
+      voiceSocket.onclose = () => {
+        voiceSocket = null;
+        set({ isProcessing: false });
+      };
+    });
+
+    return connectPromise;
+  },
+
+  removePlayedChunk: () => {
+    set((state) => ({ audioChunks: state.audioChunks.slice(1) }));
+  },
+
   submitText: async (text) => {
     const trimmed = text.trim();
     if (!trimmed) return;
@@ -41,60 +109,55 @@ export const useVoiceAssistantStore = create((set, get) => ({
       messages: [...state.messages, buildMessage("user", trimmed)],
       currentTranscript: trimmed,
       isProcessing: true,
+      audioChunks: [],
       error: null,
     }));
     if (voiceErrorTimeout) clearTimeout(voiceErrorTimeout);
 
     try {
-      const result = await sendTextTurn(trimmed);
+      await get().ensureSocket();
       set((state) => ({
         messages: [
           ...state.messages,
-          buildMessage("assistant", result.response_text, {
-            transcript: result.transcript,
-            intent: result.intent,
-            audioUrl: result.audio_url,
-          }),
+          { id: `assistant-${Date.now()}`, role: "assistant", text: "", isStreaming: true },
         ],
-        activeAudioUrl: result.audio_url,
-        isProcessing: false,
       }));
+      voiceSocket.send(JSON.stringify({ type: "user_text", text: trimmed }));
     } catch (error) {
-      get().setError(getApiErrorMessage(error, "Failed to process text command."));
+      get().setError(getApiErrorMessage(error, "Không xử lý được lệnh văn bản."));
       set({ isProcessing: false });
     }
   },
 
   submitAudio: async (blob) => {
     const tempMessageId = `user-temp-${Date.now()}`;
-    set((state) => ({ 
+    set((state) => ({
       messages: [...state.messages, { id: tempMessageId, role: "user", text: "[Đang phân tích lệnh...]" }],
-      isProcessing: true, 
-      error: null 
+      isProcessing: true,
+      audioChunks: [],
+      error: null
     }));
     if (voiceErrorTimeout) clearTimeout(voiceErrorTimeout);
 
     try {
-      const result = await sendAudioTurn(blob);
+      const result = await transcribeAudio(blob);
+      const transcript = result.transcript || "";
       set((state) => ({
         messages: [
           ...state.messages.filter(m => m.id !== tempMessageId),
-          buildMessage("user", result.transcript || "Invalid command...", { transcriptOnly: true }),
-          buildMessage("assistant", result.response_text, {
-            transcript: result.transcript,
-            intent: result.intent,
-            audioUrl: result.audio_url,
-          }),
+          buildMessage("user", transcript || "Không nhận dạng được lệnh...", { transcriptOnly: true }),
+          { id: `assistant-${Date.now()}`, role: "assistant", text: "", isStreaming: true },
         ],
-        currentTranscript: result.transcript,
-        activeAudioUrl: result.audio_url,
-        isProcessing: false,
+        currentTranscript: transcript,
       }));
+
+      await get().ensureSocket();
+      voiceSocket.send(JSON.stringify({ type: "user_text", text: transcript }));
     } catch (error) {
       set((state) => ({
         messages: state.messages.filter(m => m.id !== tempMessageId)
       }));
-      get().setError(getApiErrorMessage(error, "Failed to process voice command."));
+      get().setError(getApiErrorMessage(error, "Không xử lý được lệnh giọng nói."));
       set({ isProcessing: false });
     }
   },

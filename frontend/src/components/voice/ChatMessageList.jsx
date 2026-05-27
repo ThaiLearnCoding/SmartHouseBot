@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { formatIntent } from "../../lib/utils";
 
 export default function ChatMessageList({ messages, isProcessing }) {
   const containerRef = useRef(null);
@@ -39,7 +40,7 @@ export default function ChatMessageList({ messages, isProcessing }) {
               <p className="bmw-body-md">{message.text}</p>
               {message.intent ? (
                 <p className="mt-2 bmw-caption" style={{ color: isAssistant ? 'var(--color-muted)' : 'var(--color-on-dark-soft)' }}>
-                  Intent: {message.intent}
+                  Ý định: {formatIntent(message.intent)}
                 </p>
               ) : null}
             </div>

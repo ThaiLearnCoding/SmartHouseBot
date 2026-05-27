@@ -14,3 +14,13 @@ export async function sendAudioTurn(blob) {
   });
   return data;
 }
+
+export async function transcribeAudio(blob) {
+  const formData = new FormData();
+  formData.append("audio", blob, "voice.webm");
+
+  const { data } = await axiosInstance.post("/voice/transcribe", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return data;
+}

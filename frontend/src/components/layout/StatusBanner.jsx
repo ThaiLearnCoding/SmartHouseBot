@@ -16,7 +16,7 @@ export default function StatusBanner({ health, error }) {
         className="w-full p-4 flex items-center justify-center"
         style={{ backgroundColor: 'var(--color-surface-dark-elevated)', color: 'var(--color-on-dark)' }}
       >
-        <span className="bmw-body-md">Connecting to backend services...</span>
+        <span className="bmw-body-md">Đang kết nối tới backend...</span>
       </div>
     );
   }

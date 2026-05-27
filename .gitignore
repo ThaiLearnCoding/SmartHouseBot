@@ -43,6 +43,7 @@ Thumbs.db
 models/
 generated_audio/
 backend/generated_audio/
+backend/data/
 
 # Audio and temp files
 *.wav
@@ -50,3 +51,8 @@ backend/generated_audio/
 *.ogg
 *.webm
 *.tmp
+
+
+# Logs
+backend/logs/
+docs

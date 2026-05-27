@@ -1,4 +1,4 @@
-import { formatHumidity, formatTemperature } from "../../lib/utils";
+import { formatHumidity, formatStatusSource, formatTemperature } from "../../lib/utils";
 
 function OverviewCard({ title, value, subtitle }) {
   return (
@@ -32,7 +32,7 @@ export default function OverviewCards({ latest, deviceStatus }) {
       <OverviewCard
         title="Thiết bị hoạt động"
         value={deviceStatus?.active_devices ?? 0}
-        subtitle={`Nguồn trạng thái: ${deviceStatus?.status_source ?? "không rõ"}`}
+        subtitle={`Nguồn trạng thái: ${formatStatusSource(deviceStatus?.status_source)}`}
       />
     </div>
   );

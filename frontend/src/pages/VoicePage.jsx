@@ -7,7 +7,8 @@ export default function VoicePage() {
     isRecording,
     isProcessing,
     currentTranscript,
-    activeAudioUrl,
+    audioChunks,
+    removePlayedChunk,
     error: voiceError,
     setRecording,
     submitAudio,
@@ -17,16 +18,16 @@ export default function VoicePage() {
   return (
     <div className="flex flex-col">
       {/* Hero Photo Band (Simulated) */}
-      <div 
+      <div
         className="w-full flex items-center justify-center text-center"
-        style={{ 
-          backgroundColor: 'var(--color-surface-soft)', 
+        style={{
+          backgroundColor: 'var(--color-surface-soft)',
           padding: '80px 24px',
           borderBottom: '1px solid var(--color-hairline)'
         }}
       >
         <div className="max-w-[1440px] mx-auto">
-          <h1 className="bmw-display-lg" style={{ color: 'var(--color-ink)' }}>VOICE ASSISTANT</h1>
+          <h1 className="bmw-display-lg" style={{ color: "var(--color-ink)" }}>TRỢ LÝ GIỌNG NÓI</h1>
         </div>
       </div>
 
@@ -37,7 +38,8 @@ export default function VoicePage() {
             isRecording={isRecording}
             isProcessing={isProcessing}
             currentTranscript={currentTranscript}
-            activeAudioUrl={activeAudioUrl}
+            audioChunks={audioChunks}
+            onChunkPlayed={removePlayedChunk}
             error={voiceError}
             onRecordingChange={setRecording}
             onAudioReady={submitAudio}

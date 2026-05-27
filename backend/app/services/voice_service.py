@@ -1,14 +1,17 @@
+import base64
 import logging
 import tempfile
 from pathlib import Path
+from typing import Generator, Optional
 
-import requests
 from fastapi import HTTPException
 
 from backend.app.core.config import get_settings
+from backend.app.core.audit import write_audit_event
+from backend.app.db.repository import storage_repository
 from backend.app.schemas.voice import AssistantResult
 from backend.app.services.coreiot_service import coreiot_service
-from backend.app.services.intent_service import parse_intent
+from backend.app.services.llm_service import decide_intent, generate_response_text, stream_response_text
 from backend.app.services.tts_service import tts_service
 from backend.app.services.whisper_service import whisper_service
 
@@ -76,51 +79,142 @@ def build_house_advice(temp_value, humidity_value) -> str:
     return f"{intro}. {tips_text}."
 
 
-def maybe_natural_response(intent: str, user_text: str, base_response: str) -> str:
-    settings = get_settings()
-    if not settings.llm_enabled or settings.llm_backend.strip().lower() != "ollama":
-        return base_response
-
-    system_prompt = (
-        "Bạn là trợ lý nhà thông minh. QUY TẮC TỐI THƯỢNG: Chỉ được phép trả lời bằng TIẾNG VIỆT (Vietnamese). "
-        "Tuyệt đối KHÔNG sử dụng tiếng Trung, tiếng Anh, tiếng Indonesia hay bất kỳ ngôn ngữ nào khác. "
-        "Nhiệm vụ: Viết lại câu trả lời gốc sao cho tự nhiên, thân thiện và dễ hiểu. "
-        "Phải giữ nguyên chính xác các thông số (nhiệt độ, độ ẩm, góc servo, trạng thái bật/tắt). "
-        "Chỉ trả về nội dung câu trả lời cuối cùng, không giải thích gì thêm."
-    )
-
-    prompt = (
-        f"Lệnh của người dùng: {user_text}\n"
-        f"Câu trả lời gốc: {base_response}\n\n"
-        "Hãy viết lại câu trả lời gốc bằng TIẾNG VIỆT:"
-    )
-
-    payload = {
-        "model": settings.ollama_model,
-        "system": system_prompt,
-        "prompt": prompt,
-        "stream": False,
-        "options": {
-            "temperature": 0.1,  # Lowered to heavily reduce hallucinations
-            "top_p": 0.5
-        },
-    }
-
-    try:
-        response = requests.post(
-            f"{settings.ollama_url.rstrip('/')}/api/generate",
-            json=payload,
-            timeout=settings.llm_timeout_seconds,
-        )
-        response.raise_for_status()
-        candidate = response.json().get("response", "").strip()
-        return candidate or base_response
-    except Exception:
-        logger.error("Failed to call LLM backend", exc_info=True)
-        return base_response
-
-
 class VoiceService:
+    def _resolve_intent(self, user_text: str) -> tuple[str, dict, str]:
+        if not user_text.strip():
+            return "empty", {}, "local"
+
+        settings = get_settings()
+        if settings.llm_enabled and settings.llm_intent_enabled and settings.llm_backend.strip().lower() == "ollama":
+            decision = decide_intent(user_text)
+            if decision and decision.confidence >= settings.llm_confidence_threshold:
+                intent = decision.intent
+                params = decision.params or {}
+                if intent == "set_led" and isinstance(params.get("on"), bool):
+                    return intent, params, "llm"
+                if intent == "set_servo":
+                    angle = params.get("angle")
+                    if isinstance(angle, (int, float)):
+                        params["angle"] = max(0, min(180, int(angle)))
+                        return intent, params, "llm"
+                    return "need_clarification", {
+                        "question": "Bạn muốn xoay servo tới góc bao nhiêu? Hãy nói một góc từ 0 đến 180, ví dụ: 'servo 90 độ'."
+                    }, "llm"
+                if intent == "device_status":
+                    device = params.get("device")
+                    if device not in {"led", "servo", "all"}:
+                        params["device"] = "all"
+                    return intent, params, "llm"
+                if intent in {"read_sensor", "house_summary", "out_of_domain", "chitchat", "need_clarification"}:
+                    return intent, params, "llm"
+            return "need_clarification", {
+                "question": (
+                    "Bạn muốn tôi làm gì? Ví dụ: đọc nhiệt độ/độ ẩm, bật/tắt đèn, "
+                    "hoặc xoay servo đến một góc cụ thể."
+                )
+            }, "llm_low_confidence"
+
+        return "need_clarification", {
+            "question": "Tôi chưa sẵn sàng xử lý lệnh lúc này. Bạn vui lòng thử lại sau ít phút."
+        }, "llm_unavailable"
+
+    def _build_response_text(self, user_text: str) -> tuple[str, str, str]:
+        intent, payload, source = self._resolve_intent(user_text)
+        logger.info("Voice intent resolved", extra={"intent": intent, "source": source})
+        write_audit_event({
+            "event": "intent_resolved",
+            "intent": intent,
+            "source": source,
+            "user_text": user_text,
+        })
+
+        if intent == "empty":
+            return (
+                intent,
+                f"Tôi chưa nghe rõ lệnh của bạn. Vui lòng thử lại. {VALID_COMMAND_HINT}",
+                source,
+            )
+
+        if intent == "out_of_domain":
+            return (
+                intent,
+                f"Tôi chỉ hỗ trợ các lệnh nhà thông minh như đọc nhiệt độ, độ ẩm, bật tắt LED hoặc điều khiển servo. {VALID_COMMAND_HINT}",
+                source,
+            )
+
+        if intent == "chitchat":
+            return intent, "Tôi sẵn sàng hỗ trợ các lệnh nhà thông minh. Bạn muốn làm gì tiếp?", source
+
+        if intent == "device_status":
+            try:
+                status = coreiot_service.get_device_status()
+            except HTTPException as exc:
+                return intent, self._coreiot_failure_result(user_text, intent, exc).response_text, source
+
+            device = (payload or {}).get("device", "all")
+            parts = []
+            if device in {"led", "all"}:
+                if status.led_on is None:
+                    parts.append("Tôi chưa đọc được trạng thái đèn LED")
+                else:
+                    parts.append(f"Đèn LED hiện đang {'bật' if status.led_on else 'tắt'}")
+            if device in {"servo", "all"}:
+                if status.servo_angle is None:
+                    parts.append("Tôi chưa đọc được góc servo hiện tại")
+                else:
+                    parts.append(f"Servo hiện ở góc {status.servo_angle} độ")
+
+            return intent, ". ".join(parts) + ".", source
+
+        if intent == "need_clarification":
+            return intent, payload["question"], source
+
+        if intent == "set_led":
+            try:
+                status = coreiot_service.set_led(bool(payload["on"]), source="voice")
+            except HTTPException as exc:
+                return intent, self._coreiot_failure_result(user_text, intent, exc).response_text, source
+            state_text = "bật" if status.led_on else "tắt"
+            logger.info("Device action executed", extra={"action": "set_led", "value": status.led_on})
+            write_audit_event({
+                "event": "device_action",
+                "action": "set_led",
+                "value": status.led_on,
+                "intent": intent,
+            })
+            return intent, f"Đèn LED hiện đã {state_text}.", source
+
+        if intent == "set_servo":
+            try:
+                status = coreiot_service.set_servo(int(payload["angle"]), source="voice")
+            except HTTPException as exc:
+                return intent, self._coreiot_failure_result(user_text, intent, exc).response_text, source
+            angle = status.servo_angle if status.servo_angle is not None else int(payload["angle"])
+            logger.info("Device action executed", extra={"action": "set_servo", "value": angle})
+            write_audit_event({
+                "event": "device_action",
+                "action": "set_servo",
+                "value": angle,
+                "intent": intent,
+            })
+            return intent, f"Servo đã được đặt ở góc {angle} độ.", source
+
+        if intent in {"read_sensor", "house_summary"}:
+            try:
+                snapshot = coreiot_service.get_latest_snapshot()
+            except HTTPException as exc:
+                return intent, self._coreiot_failure_result(user_text, intent, exc).response_text, source
+            if intent == "house_summary":
+                response_text = build_house_advice(snapshot.temperature, snapshot.humidity)
+            else:
+                response_text = (
+                    f"Nhiệt độ hiện tại là {snapshot.temperature} độ C "
+                    f"và độ ẩm là {snapshot.humidity}%."
+                )
+            return intent, response_text, source
+
+        return "unknown", f"Tôi chưa hiểu lệnh của bạn. {VALID_COMMAND_HINT}", source
+
     def _coreiot_failure_result(self, user_text: str, intent: str, exc: Exception) -> AssistantResult:
         logger.warning("Voice command could not reach CoreIoT", exc_info=True)
         detail = getattr(exc, "detail", None)
@@ -129,57 +223,31 @@ class VoiceService:
             response_text = f"{response_text} Chi tiết: {detail}"
         return self._result(user_text, intent, response_text)
 
+    def log_interaction(
+        self,
+        transcript: str,
+        intent: str,
+        response_text: str,
+        *,
+        success: bool = True,
+    ) -> None:
+        storage_repository.log_voice_interaction(
+            transcript,
+            intent,
+            response_text,
+            success=success,
+        )
+
     def execute_text(self, user_text: str) -> AssistantResult:
-        intent, payload = parse_intent(user_text)
+        intent, response_text, _source = self._build_response_text(user_text)
+        success = not response_text.startswith(COREIOT_UNAVAILABLE_MESSAGE)
+        result = self._result(user_text, intent, response_text)
+        self.log_interaction(user_text, intent, result.response_text, success=success)
+        return result
 
-        if intent == "empty":
-            return self._result(
-                user_text,
-                intent,
-                f"Tôi chưa nghe rõ lệnh của bạn. Vui lòng thử lại. {VALID_COMMAND_HINT}",
-            )
-
-        if intent == "out_of_domain":
-            return self._result(
-                user_text,
-                intent,
-                f"Tôi chỉ hỗ trợ các lệnh nhà thông minh như đọc nhiệt độ, độ ẩm, bật tắt LED hoặc điều khiển servo. {VALID_COMMAND_HINT}",
-            )
-
-        if intent == "need_clarification":
-            return self._result(user_text, intent, payload["question"])
-
-        if intent == "set_led":
-            try:
-                status = coreiot_service.set_led(bool(payload["on"]))
-            except HTTPException as exc:
-                return self._coreiot_failure_result(user_text, intent, exc)
-            state_text = "bật" if status.led_on else "tắt"
-            return self._result(user_text, intent, f"Đèn LED hiện đã {state_text}.")
-
-        if intent == "set_servo":
-            try:
-                status = coreiot_service.set_servo(int(payload["angle"]))
-            except HTTPException as exc:
-                return self._coreiot_failure_result(user_text, intent, exc)
-            angle = status.servo_angle if status.servo_angle is not None else int(payload["angle"])
-            return self._result(user_text, intent, f"Servo đã được đặt ở góc {angle} độ.")
-
-        if intent in {"read_sensor", "house_summary"}:
-            try:
-                snapshot = coreiot_service.get_latest_snapshot()
-            except HTTPException as exc:
-                return self._coreiot_failure_result(user_text, intent, exc)
-            if intent == "house_summary":
-                response_text = build_house_advice(snapshot.temperature, snapshot.humidity)
-            else:
-                response_text = (
-                    f"Nhiệt độ hiện tại là {snapshot.temperature} độ C "
-                    f"và độ ẩm là {snapshot.humidity}%."
-                )
-            return self._result(user_text, intent, response_text)
-
-        return self._result(user_text, "unknown", f"Tôi chưa hiểu lệnh của bạn. {VALID_COMMAND_HINT}")
+    def stream_response(self, user_text: str) -> tuple[str, Generator[str, None, str]]:
+        intent, response_text, _source = self._build_response_text(user_text)
+        return intent, stream_response_text(user_text, response_text)
 
     def execute_audio(self, suffix: str, content: bytes) -> AssistantResult:
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix or ".webm") as temp_file:
@@ -194,14 +262,30 @@ class VoiceService:
         finally:
             temp_path.unlink(missing_ok=True)
 
+    def transcribe_audio(self, suffix: str, content: bytes) -> str:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix or ".webm") as temp_file:
+            temp_file.write(content)
+            temp_path = Path(temp_file.name)
+
+        try:
+            return whisper_service.transcribe_file(temp_path)
+        finally:
+            temp_path.unlink(missing_ok=True)
+
     def _result(self, transcript: str, intent: str, response_text: str) -> AssistantResult:
-        natural_response = maybe_natural_response(intent, transcript, response_text)
+        natural_response = generate_response_text(transcript, response_text)
         return AssistantResult(
             transcript=transcript,
             intent=intent,
             response_text=natural_response,
             audio_url=tts_service.synthesize(natural_response),
         )
+
+    def synthesize_audio_chunks(self, text: str) -> Optional[list[str]]:
+        chunks = tts_service.synthesize_chunks(text)
+        if not chunks:
+            return None
+        return [base64.b64encode(chunk).decode("ascii") for chunk in chunks]
 
 
 voice_service = VoiceService()

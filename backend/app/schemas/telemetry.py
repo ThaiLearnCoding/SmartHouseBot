@@ -21,4 +21,5 @@ class TelemetryLatestResponse(BaseModel):
 
 class TelemetryHistoryResponse(BaseModel):
     range_hours: int
+    sample_interval_seconds: int
     points: List[TelemetryPoint]

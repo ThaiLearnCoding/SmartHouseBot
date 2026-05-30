@@ -81,9 +81,41 @@ async def voice_stream(ws: WebSocket):
 
             intent, token_stream = await asyncio.to_thread(voice_service.stream_response, user_text)
             final_text = ""
+            sentence_buffer = ""
+            chunk_index = 0
+
             for token in token_stream:
                 final_text += token
+                sentence_buffer += token
                 await ws.send_json({"type": "assistant_token", "token": token})
+
+                # If sentence buffer has enough length and ends with punctuation/newline
+                if len(sentence_buffer) >= 15 and any(sentence_buffer.endswith(d) for d in {".", "?", "!", "\n", ";"}):
+                    clean_sentence = sentence_buffer.strip()
+                    sentence_buffer = ""
+                    if clean_sentence:
+                        audio_chunks = await asyncio.to_thread(voice_service.synthesize_audio_chunks, clean_sentence)
+                        if audio_chunks:
+                            for chunk in audio_chunks:
+                                await ws.send_json({
+                                    "type": "audio_chunk",
+                                    "index": chunk_index,
+                                    "data": chunk,
+                                })
+                                chunk_index += 1
+
+            # Synthesize any remaining sentence buffer
+            clean_sentence = sentence_buffer.strip()
+            if clean_sentence:
+                audio_chunks = await asyncio.to_thread(voice_service.synthesize_audio_chunks, clean_sentence)
+                if audio_chunks:
+                    for chunk in audio_chunks:
+                        await ws.send_json({
+                            "type": "audio_chunk",
+                            "index": chunk_index,
+                            "data": chunk,
+                        })
+                        chunk_index += 1
 
             final_text = final_text.strip()
             await ws.send_json({
@@ -92,15 +124,6 @@ async def voice_stream(ws: WebSocket):
                 "response_text": final_text,
                 "transcript": user_text,
             })
-
-            audio_chunks = await asyncio.to_thread(voice_service.synthesize_audio_chunks, final_text)
-            if audio_chunks:
-                for index, chunk in enumerate(audio_chunks):
-                    await ws.send_json({
-                        "type": "audio_chunk",
-                        "index": index,
-                        "data": chunk,
-                    })
             await ws.send_json({"type": "audio_done"})
     except WebSocketDisconnect:
         return

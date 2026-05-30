@@ -24,6 +24,8 @@ export default function ChatMessageList({ messages, isProcessing }) {
 
       {messages.map((message) => {
         const isAssistant = message.role === "assistant";
+        const isEmptyStreaming = isAssistant && message.isStreaming && !message.text;
+
         return (
           <div
             key={message.id}
@@ -37,7 +39,15 @@ export default function ChatMessageList({ messages, isProcessing }) {
                 border: isAssistant ? '1px solid var(--color-hairline-strong)' : 'none',
               }}
             >
-              <p className="bmw-body-md">{message.text}</p>
+              {isEmptyStreaming ? (
+                <div className="flex items-center gap-1.5 py-1">
+                  <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: 'var(--color-muted)' }}></div>
+                  <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: 'var(--color-muted)', animationDelay: '0.2s' }}></div>
+                  <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: 'var(--color-muted)', animationDelay: '0.4s' }}></div>
+                </div>
+              ) : (
+                <p className="bmw-body-md">{message.text}</p>
+              )}
               {message.intent ? (
                 <p className="mt-2 bmw-caption" style={{ color: isAssistant ? 'var(--color-muted)' : 'var(--color-on-dark-soft)' }}>
                   Ý định: {formatIntent(message.intent)}
@@ -48,7 +58,7 @@ export default function ChatMessageList({ messages, isProcessing }) {
         );
       })}
 
-      {isProcessing ? (
+      {isProcessing && !messages.some(m => m.role === "assistant" && m.isStreaming) ? (
         <div className="flex w-full justify-start">
           <div 
             className="p-4 flex items-center gap-2"
@@ -57,9 +67,9 @@ export default function ChatMessageList({ messages, isProcessing }) {
               border: '1px solid var(--color-hairline-strong)',
             }}
           >
-            <span className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: 'var(--color-muted)' }}></span>
-            <span className="w-2 h-2 rounded-full animate-pulse delay-100" style={{ backgroundColor: 'var(--color-muted)' }}></span>
-            <span className="w-2 h-2 rounded-full animate-pulse delay-200" style={{ backgroundColor: 'var(--color-muted)' }}></span>
+            <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: 'var(--color-muted)' }}></div>
+            <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: 'var(--color-muted)', animationDelay: '0.2s' }}></div>
+            <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: 'var(--color-muted)', animationDelay: '0.4s' }}></div>
           </div>
         </div>
       ) : null}

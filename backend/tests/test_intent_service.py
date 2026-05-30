@@ -10,4 +10,6 @@ def test_parse_vietnamese_device_and_sensor_commands():
     assert parse_intent("bật đèn") == ("set_led", {"on": True})
     assert parse_intent("tắt đèn") == ("set_led", {"on": False})
     assert parse_intent("servo 90 độ") == ("set_servo", {"angle": 90})
-    assert parse_intent("đọc nhiệt độ độ ẩm") == ("read_sensor", {})
+    assert parse_intent("đọc nhiệt độ độ ẩm") == ("read_sensor", {"sensor": "all"})
+    assert parse_intent("đọc nhiệt độ") == ("read_sensor", {"sensor": "temperature"})
+    assert parse_intent("đọc độ ẩm") == ("read_sensor", {"sensor": "humidity"})

@@ -207,10 +207,16 @@ class VoiceService:
             if intent == "house_summary":
                 response_text = build_house_advice(snapshot.temperature, snapshot.humidity)
             else:
-                response_text = (
-                    f"Nhiệt độ hiện tại là {snapshot.temperature} độ C "
-                    f"và độ ẩm là {snapshot.humidity}%."
-                )
+                sensor = (payload or {}).get("sensor", "all")
+                if sensor == "temperature":
+                    response_text = f"Nhiệt độ hiện tại là {snapshot.temperature} độ C."
+                elif sensor == "humidity":
+                    response_text = f"Độ ẩm hiện tại là {snapshot.humidity}%."
+                else:
+                    response_text = (
+                        f"Nhiệt độ hiện tại là {snapshot.temperature} độ C "
+                        f"và độ ẩm là {snapshot.humidity}%."
+                    )
             return intent, response_text, source
 
         return "unknown", f"Tôi chưa hiểu lệnh của bạn. {VALID_COMMAND_HINT}", source
@@ -247,6 +253,11 @@ class VoiceService:
 
     def stream_response(self, user_text: str) -> tuple[str, Generator[str, None, str]]:
         intent, response_text, _source = self._build_response_text(user_text)
+        if intent in {"set_led", "set_servo", "device_status", "read_sensor", "house_summary", "need_clarification"}:
+            def dummy_generator():
+                yield response_text
+                return response_text
+            return intent, dummy_generator()
         return intent, stream_response_text(user_text, response_text)
 
     def execute_audio(self, suffix: str, content: bytes) -> AssistantResult:
@@ -273,7 +284,10 @@ class VoiceService:
             temp_path.unlink(missing_ok=True)
 
     def _result(self, transcript: str, intent: str, response_text: str) -> AssistantResult:
-        natural_response = generate_response_text(transcript, response_text)
+        if intent in {"set_led", "set_servo", "device_status", "read_sensor", "house_summary", "need_clarification"}:
+            natural_response = response_text
+        else:
+            natural_response = generate_response_text(transcript, response_text)
         return AssistantResult(
             transcript=transcript,
             intent=intent,

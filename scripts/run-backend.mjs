@@ -77,8 +77,6 @@ const child = spawn(command, args, {
   env: {
     ...process.env,
     DISABLE_SAFETENSORS_CONVERSION: "1",
-    HF_HUB_OFFLINE: "1",
-    TRANSFORMERS_OFFLINE: "1",
     TRANSFORMERS_VERBOSITY: "error",
     TQDM_DISABLE: "1",
   },

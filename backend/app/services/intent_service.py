@@ -64,7 +64,14 @@ def parse_intent(user_text: str) -> Tuple[str, Dict]:
     ]):
         if any(k in normalized for k in ["hom nay", "today", "tinh trang", "condition", "house status", "nha"]):
             return "house_summary", {}
-        return "read_sensor", {}
+        
+        has_temp = any(k in normalized for k in ["nhiet do", "temperature", "bao nhieu do", "nong", "lanh"])
+        has_humid = any(k in normalized for k in ["do am", "humidity"])
+        if has_temp and not has_humid:
+            return "read_sensor", {"sensor": "temperature"}
+        if has_humid and not has_temp:
+            return "read_sensor", {"sensor": "humidity"}
+        return "read_sensor", {"sensor": "all"}
 
     if any(k in normalized for k in [
         "bao nhieu",
@@ -73,7 +80,13 @@ def parse_intent(user_text: str) -> Tuple[str, Dict]:
         "bao nhieu a",
         "bao nhieu ha",
     ]) and any(k in normalized for k in ["nhiet do", "do am", "nong", "lanh"]):
-        return "read_sensor", {}
+        has_temp = any(k in normalized for k in ["nhiet do", "nong", "lanh"])
+        has_humid = "do am" in normalized
+        if has_temp and not has_humid:
+            return "read_sensor", {"sensor": "temperature"}
+        if has_humid and not has_temp:
+            return "read_sensor", {"sensor": "humidity"}
+        return "read_sensor", {"sensor": "all"}
 
     if any(k in normalized for k in ["tinh trang nha", "condition of the house", "house today", "nha hom nay"]):
         return "house_summary", {}
